@@ -160,3 +160,71 @@ testthat::test_that("compute_power_curve returns one row per h and monotone powe
   testthat::expect_true(all(diff(out$ncp) > 0))
   testthat::expect_true(all(diff(out$power) > 0))
 })
+
+
+testthat::test_that("local_shift_vector() and mean_vector() return correct values", {
+  j <- 3
+  k <- 3
+  time_index <- 0:k
+  ref <- "4PL"
+  params_list = list(inflection = c(1.0, 1.5, 3), slope = c(1.0, 1.2, 1.5))
+  
+  result1 <- mean_vector(ref = ref, j = j, k = k, time_index = rep(time_index, 2), params_list = params_list)
+  result2 <- local_shift_vector(ref = ref, j = j, k = k, time_index = time_index, h = c(1, 2, 3), params_list = params_list)
+  
+  expected1 <- c(
+    0.26894142137,
+    0.50000000000,
+    0.73105857863,
+    0.88079707798,
+    0.26894142137,
+    0.50000000000,
+    0.73105857863,
+    0.88079707798,
+    0.14185106490,
+    0.35434369377,
+    0.64565630623,
+    0.85814893510,
+    0.14185106490,
+    0.35434369377,
+    0.64565630623,
+    0.85814893510,
+    0.01098694263,
+    0.04742587318,
+    0.18242552381,
+    0.50000000000,
+    0.01098694263,
+    0.04742587318,
+    0.18242552381,
+    0.50000000000
+  )
+  expected2 <- c(
+    0,
+    0,
+    0,
+    0,
+    0,
+    -0.25,
+    -0.3932238665,
+    -0.3149807562,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -0.5490821771,
+    -1.0981643542,
+    -0.8764512501,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -0.2032949688,
+    -1.3423180686,
+    -3.3750000000
+  )
+
+  testthat::expect_equal(result1, expected1, tolerance = 1e-10)
+  testthat::expect_equal(as.numeric(result2), expected2, tolerance = 1e-10)
+})
