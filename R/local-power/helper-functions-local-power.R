@@ -306,54 +306,6 @@ build_kronecker_covariance <- function(K,
 }
 
 
-## TESTING
-
-jacobian_slowing_multiple_outcomes(
-  j = 3,
-  k = 4,
-  time_index = 0:4,
-  ref = "4PL",
-  params_list = lapply(seq_along(c(1, 2, 3)), function(i)
-    list(
-      slope = c(1, 2, 3)[i], inflection = c(2, 2, 2)[i]
-    ))
-)
-jacobian_slowing_multiple_outcomes_shared(
-  j = 3,
-  k = 4,
-  time_index = 0:4,
-  ref = "4PL",
-  params_list = lapply(seq_along(c(1, 2, 3)), function(i)
-    list(
-      slope = c(1, 2, 3)[i], inflection = c(2, 2, 2)[i]^2
-    ))
-)
-
-mean_vector(
-  ref = "4PL",
-  j = 3,
-  k = 4,
-  time_index = rep(0:4, 2),
-  params_list = list(slope = c(1, 2, 3), inflection = c(2, 2, 2))
-)
-
-build_kronecker_covariance(
-  K = 4,
-  J = 3,
-  rho_time = 0.8,
-  rho_outcome = 0.75
-)
-
-local_shift_vector(
-  ref = "4PL",
-  j = 3,
-  k = 4,
-  time_index = 0:4,
-  h = 3:1,
-  params_list = list(slope = c(1, 2, 3), inflection = c(2, 2, 2))
-)
-
-
 
 
 
