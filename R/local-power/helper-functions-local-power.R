@@ -36,21 +36,21 @@ compute_power_curve <- function(B, h_grid, alpha, Sigma, base_effect) {
 # Local shift functions
 # ============================================================================
 
-# Compute the local effect vector (base_effect elsewhere) given the local parametric model's jacobian.
+# Compute the local effect vector (base_effect elsewhere) given the local parametric model's Jacobian.
 local_shift_vector <- function(ref = "4PL",
                                j,
                                k,
-                               time_index,
+                               times,
                                h = 1,
                                ...) {
   # The local shift vector only depends on the Jacobian of the local parametric model.
   if (ref == "4PL") {
-    jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, time_index, ref = ref, ...)
+    jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, times, ref = ref, ...)
     # Column vector that select the treatment effect parameter from the Jacobian. The non-zero entries correspond to the local treatment effects for each outcome.
     jacobian_gamma_theta <- matrix(0, nrow = 3 * j, ncol = 1)
     jacobian_gamma_theta[seq(3, 3 * j, by = 3), 1] <- h
   } else if (ref == "spline") {
-    # jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, time_index, ref = ref, ...)
+    # jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, times, ref = ref, ...)
   } else {
     stop("Unknown reference model: ", ref)
   }
@@ -61,16 +61,16 @@ local_shift_vector <- function(ref = "4PL",
 mean_vector <- function(ref = "4PL",
                         j,
                         k,
-                        time_index,
+                        times,
                         params_list = list(),
                         ...) {
   if (ref == "4PL") {
     mean_vector_dbl <- purrr::map2(params_list$slope, params_list$inflection, function(slope, inflection) {
-      function_4PL(time_index, slope = slope, inflection = inflection)
+      function_4PL(times, slope = slope, inflection = inflection)
     }) %>%
       do.call(c, .)
   } else if (ref == "spline") {
-    # jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, time_index, ref = ref, ...)
+    # jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, times, ref = ref, ...)
   } else {
     stop("Unknown reference model: ", ref)
   }
@@ -82,38 +82,38 @@ mean_vector <- function(ref = "4PL",
 # Jacobian functions
 # ============================================================================
 
-jacobian_slowing_single_outcome <- function(k, time_index, ref = "4PL", ...) {
+jacobian_slowing_single_outcome <- function(k, times, ref = "4PL", ...) {
   # The 4PL model considered here has 2 parameters: the slope and the inflection point.
   # (The upper and lower asymptotes are set to 1 and 0, respectively.)
   jacobian <- matrix(0, nrow = 2 * (k + 1), ncol = 3)
   
   # Jacobian of the control group (first k+1 rows) with respect to the slope and inflection point parameters.
-  jacobian[1:(k + 1), 1:2] <- jacobian_ref_pm(time_index, ref = ref, ...)
+  jacobian[1:(k + 1), 1:2] <- jacobian_ref_pm(times, ref = ref, ...)
   # Jacobian of the treatment group (last k+1 rows) with respect to the slope and inflection point parameters.
-  jacobian[(k + 2):(2 * (k + 1)), 1:2] <- jacobian_ref_pm(time_index, ref = ref, ...)
+  jacobian[(k + 2):(2 * (k + 1)), 1:2] <- jacobian_ref_pm(times, ref = ref, ...)
   # Jacobian of the treatment group (last k+1 rows) with respect to the treatment effect parameter (third column).
-  jacobian[(k + 2):(2 * (k + 1)), 3] <- ref_d(time_index, ref = ref, ...) * time_index
+  jacobian[(k + 2):(2 * (k + 1)), 3] <- ref_d(times, ref = ref, ...) * times
   
   jacobian
 }
 
-jacobian_ref_pm <- function(time_index, ref = "4PL", ...) {
+jacobian_ref_pm <- function(times, ref = "4PL", ...) {
   if (ref == "4PL") {
-    jacobian_4PL(time_index, ...)
+    jacobian_4PL(times, ...)
   } else if (ref == "spline") {
     # For the spline reference model, we can use the same Jacobian as the 4PL model for simplicity.
-    # jacobian_4PL(time_index, ...)
+    # jacobian_4PL(times, ...)
   } else {
     stop("Unknown reference model: ", ref)
   }
 }
 
-ref_d <- function(time_index, ref = "4PL", ...) {
+ref_d <- function(times, ref = "4PL", ...) {
   if (ref == "4PL") {
-    time_d_4PL(time_index, ...)
+    time_d_4PL(times, ...)
   } else if (ref == "spline") {
     # For the spline reference model, we can use the same derivative as the 4PL model for simplicity.
-    # time_d_4PL(time_index, ...)
+    # time_d_4PL(times, ...)
   } else {
     stop("Unknown reference model: ", ref)
   }
@@ -121,7 +121,7 @@ ref_d <- function(time_index, ref = "4PL", ...) {
 
 jacobian_slowing_multiple_outcomes <- function(j,
                                                k,
-                                               time_index,
+                                               times,
                                                ref = "4PL",
                                                params_list = list(),
                                                slowing_only = FALSE) {
@@ -135,7 +135,7 @@ jacobian_slowing_multiple_outcomes <- function(j,
     jacobian[start_row:end_row, start_col:end_col] <- do.call(jacobian_slowing_single_outcome, c(
       list(
         k = k,
-        time_index = time_index,
+        times = times,
         ref = ref
       ),
       purrr::map(params_list, outcome_idx)
@@ -152,11 +152,11 @@ jacobian_slowing_multiple_outcomes <- function(j,
 
 jacobian_slowing_multiple_outcomes_shared <- function(j,
                                                       k,
-                                                      time_index,
+                                                      times,
                                                       ref = "4PL",
                                                       params_list = list(),
                                                       slowing_only = FALSE) {
-  jacobian_outcome_specific <- jacobian_slowing_multiple_outcomes(j, k, time_index, ref = ref, params_list = params_list)
+  jacobian_outcome_specific <- jacobian_slowing_multiple_outcomes(j, k, times, ref = ref, params_list = params_list)
   
   jacobian_gamma_theta <- matrix(0, nrow = 3 * j, ncol = 2 * j + 1)
   
@@ -197,27 +197,71 @@ build_contrast_matrix <- function(jacobian, A, Sigma) {
 # | 0 -1 0 ... 0 | 0 1 0 ... 0 |
 # | 0 0 -1 ... 0 | 0 0 1 ... 0 |
 # | 0 0 0 ... -1 | 0 0 0 ... 1 |
-build_omnibus_contrast_single_outcome <- function(k) {
-  contrast <- matrix(0, nrow = k, ncol = 2 * (k + 1))
-  contrast[, 2:(k + 1)] <- diag(-1, k)
-  contrast[, (k + 3):(2 * (k + 1))] <- diag(1, k)
+build_omnibus_contrast_single_outcome <- function(K) {
+  contrast <- matrix(0, nrow = K, ncol = 2 * (K + 1))
+  contrast[, 2:(K + 1)] <- diag(-1, K)
+  contrast[, (K + 3):(2 * (K + 1))] <- diag(1, K)
   contrast
 }
 
 # Contrast matrix for omnibus test with multiple outcomes.
-build_omnibus_contrast_multi_outcome <- function(j, k) {
-  diag(1, j) %x% build_omnibus_contrast_single_outcome(k)
+build_omnibus_contrast_multi_outcome <- function(J, K, times = NULL) {
+  if (!is.null(times)) {
+    if (!is.list(times)) {
+      stop("times must be a list of numeric vectors.")
+    }
+    # number of outcomes
+    J <- length(times)
+    no_of_measurements <- purrr::map_dbl(times, ~ length(.x)) %>%
+      sum()
+    contrast_matrix <- matrix(0, nrow = no_of_measurements - J, ncol = 2 * no_of_measurements)
+    
+    for (outcome_idx in seq_len(J)) {
+      K <- length(times[[outcome_idx]]) - 1
+      if (outcome_idx == 1) {
+        start_row <- 1
+        end_row <- K
+        start_col <- 1
+        end_col <- 2 * (K + 1)
+      } else {
+        start_row <- sum(purrr::map_dbl(times[1:(outcome_idx - 1)], ~ length(.x) - 1)) + 1
+        end_row <- start_row + K - 1
+        start_col <- sum(purrr::map_dbl(times[1:(outcome_idx - 1)], ~ 2 * length(.x))) + 1
+        end_col <- start_col + 2 * (K + 1) - 1
+      }
+      
+      contrast_matrix[start_row:end_row, start_col:end_col] <- build_omnibus_contrast_single_outcome(K)
+    }
+    
+    return(contrast_matrix)
+  } else {
+    diag(1, J) %x% build_omnibus_contrast_single_outcome(K)
+  }
 }
 
-build_summing_contrast_multi_outcome <- function(j, k) {
+build_summing_contrast_multi_outcome <- function(J, K, times = NULL) {
+  # The time points in times should agree; otherwise, summing across outcomes is not
+  # meaningful.
+  if (!is.null(times)) {
+    if (!is.list(times)) {
+      stop("times must be a list of numeric vectors.")
+    }
+    # number of outcomes
+    J <- length(times)
+    no_of_measurements_vec <- purrr::map_dbl(times, ~ length(.x))
+    if (!all(no_of_measurements_vec == no_of_measurements_vec[1])) {
+      stop("All elements of times must have the same length.")
+    }
+    K = no_of_measurements_vec[1] - 1
+  }
   # Create a contrast matrix that sums the treatment effects across all outcomes. This is done by summing the
   # rows of the omnibus contrast matrix for each time point across all outcomes. The resulting contrast matrix will
   # have K rows (one for each time point) and 2 * J * (K + 1) columns (one for each outcome and time point).
-  omnibus_contrast <- build_omnibus_contrast_multi_outcome(j, k)
+  omnibus_contrast <- build_omnibus_contrast_multi_outcome(J, K)
   # Matrix to sum the treatment effects across all outcomes for each time point.
-  sum_matrix <- matrix(0, nrow = k, ncol = j * k)
-  for (time_idx in seq_len(k)) {
-    sum_matrix[time_idx, seq(time_idx, j * k, by = k)] <- 1
+  sum_matrix <- matrix(0, nrow = K, ncol = J * K)
+  for (time_idx in seq_len(K)) {
+    sum_matrix[time_idx, seq(time_idx, J * K, by = K)] <- 1
   }
   # Multiply the omnibus contrast matrix by the sum matrix to get the summing contrast matrix.
   summing_contrast <- sum_matrix %*% omnibus_contrast
@@ -225,31 +269,64 @@ build_summing_contrast_multi_outcome <- function(j, k) {
 }
 
 # Contrast matrix for linear working model with multiple outcomes.
-build_linear_contrast_multi_outcome <- function(j, k, time_index, Sigma) {
-  jacobian <- matrix(0, nrow = j, ncol = 2 * j * (k + 1))
-  for (outcome_idx in seq_len(j)) {
-    start_col <- (outcome_idx - 1) * 2 * (k + 1) + (k + 2)
-    end_col <- start_col + k
-    jacobian[outcome_idx, start_col:end_col] <- time_index
+build_linear_contrast_multi_outcome <- function(times, Sigma) {
+  if (!is.list(times)) {
+    stop("times must be a list of numeric vectors.")
+  }
+  # number of outcomes
+  J <- length(times)
+  
+  # number of measurements
+  no_of_measurements_vec <- purrr::map_dbl(times, ~ length(.x))
+  no_of_measurements <- sum(no_of_measurements_vec)
+  
+  jacobian <- matrix(0, nrow = J, ncol = 2 * no_of_measurements)
+  for (outcome_idx in seq_len(J)) {
+    K <- no_of_measurements_vec[outcome_idx] - 1
+    if (outcome_idx == 1) {
+      start_col <- 1
+    } else {
+      start_col <- sum(purrr::map_dbl(times[1:(outcome_idx - 1)], ~ length(.x) * 2)) + 1
+    }
+    end_col <- start_col + K
+    
+    jacobian[outcome_idx, start_col:end_col] <- times[[outcome_idx]]
   }
   jacobian = t(jacobian)
   
-  A_contrast <- build_omnibus_contrast_multi_outcome(j, k)
+  A_contrast <- build_omnibus_contrast_multi_outcome(times = times)
   
   build_contrast_matrix(jacobian, A_contrast, Sigma)
 }
 
-# Contrast matrix for linear working model with multiple outcomes, assuming a common slope across outcomes.
-build_linear_contrast_common <- function(j, k, time_index, Sigma) {
-  jacobian <- matrix(0, nrow = 1, ncol = 2 * j * (k + 1))
+# Contrast matrix for linear working model with multiple outcomes, assuming a
+# common slope across outcomes.
+build_linear_contrast_common <- function(times, Sigma) {
+  if (!is.list(times)) {
+    stop("times must be a list of numeric vectors.")
+  }
+  # number of outcomes
+  J <- length(times)
+  
+  # number of measurements
+  no_of_measurements_vec <- purrr::map_dbl(times, ~ length(.x))
+  no_of_measurements <- sum(no_of_measurements_vec)
+  
+  jacobian <- matrix(0, nrow = 1, ncol = 2 * no_of_measurements)
   for (outcome_idx in seq_len(j)) {
-    start_col <- (outcome_idx - 1) * 2 * (k + 1) + (k + 2)
-    end_col <- start_col + k
-    jacobian[1, start_col:end_col] <- time_index
+    K <- no_of_measurements_vec[outcome_idx] - 1
+    if (outcome_idx == 1) {
+      start_col <- 1
+    } else {
+      start_col <- sum(purrr::map_dbl(times[1:(outcome_idx - 1)], ~ length(.x) * 2)) + 1
+    }
+    end_col <- start_col + K
+    
+    jacobian[1, start_col:end_col] <- times[[outcome_idx]]
   }
   jacobian = t(jacobian)
   
-  A_contrast <- build_omnibus_contrast_multi_outcome(j, k)
+  A_contrast <- build_omnibus_contrast_multi_outcome(times = times)
   
   build_contrast_matrix(jacobian, A_contrast, Sigma)
 }
@@ -260,23 +337,23 @@ build_linear_contrast_common <- function(j, k, time_index, Sigma) {
 
 
 # Derivative of the 4PL curve with respect to time, given the slope and inflection point parameters.
-time_d_4PL <- function(time_index, slope, inflection, ...) {
-  exp_term <- exp(-slope * (time_index - inflection))
+time_d_4PL <- function(times, slope, inflection, ...) {
+  exp_term <- exp(-slope * (times - inflection))
   denom <- (1 + exp_term)^2
   - slope * exp_term / denom
 }
 
-function_4PL <- function(time_index, slope, inflection, ...) {
-  # Compute the 4PL model values given time_index, slope, and inflection point.
-  1 / (1 + exp(-slope * (time_index - inflection)))
+function_4PL <- function(times, slope, inflection, ...) {
+  # Compute the 4PL model values given times, slope, and inflection point.
+  1 / (1 + exp(-slope * (times - inflection)))
 }
 
-jacobian_4PL <- function(time_index, slope, inflection, ...) {
+jacobian_4PL <- function(times, slope, inflection, ...) {
   # Compute the Jacobian of the 4PL model with respect to the slope and inflection point parameters.
-  exp_term <- exp(-slope * (time_index - inflection))
+  exp_term <- exp(-slope * (times - inflection))
   denom <- (1 + exp_term)^2
   d_inflection <- -slope * exp_term / denom
-  d_slope <- (time_index - inflection) * exp_term / denom
+  d_slope <- (times - inflection) * exp_term / denom
   cbind(d_inflection, d_slope)
 }
 
@@ -303,6 +380,22 @@ build_kronecker_covariance <- function(K,
   cov <- diag(1, 2) %x% outcome_cov %x% time_cov
   
   list(Sigma = cov, time_points = time_points)
+}
+
+
+# ============================================================================
+# Varia
+# ============================================================================
+
+# Check whether the elements of a list are of equal length.
+check_equal_length <- function(lst) {
+  lengths <- sapply(lst, length)
+  all(lengths == lengths[1])
+}
+
+# Check whether the elements of a list are identical.
+check_identical <- function(lst) {
+  all(sapply(lst, function(x) identical(x, lst[[1]])))
 }
 
 

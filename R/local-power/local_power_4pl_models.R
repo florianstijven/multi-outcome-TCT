@@ -26,7 +26,7 @@ scenario_grid <- scenario_grid %>%
     time_points = list(cov_list$time_points),
     A = list(build_omnibus_contrast_multi_outcome(k_values, j_values)),
     params_list = list(list(inflection = 3 + 3 * (1:j_values - 1) / (2 * j_values), slope = 1 + (1:j_values - 1) / j_values)),
-    mean_vec = list(mean_vector(ref = ref, j = j_values, k = k_values, time_index = rep(time_points, 2), params_list = params_list)),
+    mean_vec = list(mean_vector(ref = ref, j = j_values, k = k_values, times = rep(time_points, 2), params_list = params_list)),
     Sigma = list(unlist(diag(sqrt(mean_vec * (1 - mean_vec))) %*% Sigma %*% diag(sqrt(mean_vec * (1 - mean_vec))))),
   ) %>%
   select(-cov_list)
@@ -37,21 +37,21 @@ scenario_grid <- scenario_grid %>%
   rowwise() %>%
   mutate(
     h = ifelse(local_alternative == "shared", list(1), list((j_values / 2) * (1:j_values) / j_values)),
-    local_shift = list(local_shift_vector(ref = ref, j = j_values, k = k_values, time_index = time_points, h = h, params_list = params_list))
+    local_shift = list(local_shift_vector(ref = ref, j = j_values, k = k_values, times = time_points, h = h, params_list = params_list))
   )
 
 # Set up all scenarios for the tests whose local power is being evaluated.
-working_model_contrast_f <- function(j, k, type, time_index = NULL, Sigma = NULL, ref = NULL, ...) {
+working_model_contrast_f <- function(j, k, type, times = NULL, Sigma = NULL, ref = NULL, ...) {
   A = build_omnibus_contrast_multi_outcome(j, k)
   if (type == "omnibus") {
     A
   } else if (type == "linear") {
-    return(build_linear_contrast_multi_outcome(j, k, time_index = time_index, Sigma = Sigma))
+    return(build_linear_contrast_multi_outcome(j, k, times = times, Sigma = Sigma))
   } else if (type == "slowing_outcome") {
-    jacobian <- jacobian_slowing_multiple_outcomes(j = j, k = k, time_index = time_index, ref = ref, slowing_only = TRUE, ...)
+    jacobian <- jacobian_slowing_multiple_outcomes(j = j, k = k, times = times, ref = ref, slowing_only = TRUE, ...)
     return(build_contrast_matrix(jacobian, A = A, Sigma = Sigma))
   } else if (type == "slowing_shared") {
-    jacobian <- jacobian_slowing_multiple_outcomes_shared(j = j, k = k, time_index = time_index, ref = ref, slowing_only = TRUE, ...)
+    jacobian <- jacobian_slowing_multiple_outcomes_shared(j = j, k = k, times = times, ref = ref, slowing_only = TRUE, ...)
     return(build_contrast_matrix(jacobian, A = A, Sigma = Sigma))
   } else if (type == "summing") {
     A_sum = build_summing_contrast_multi_outcome(j, k)
@@ -69,7 +69,7 @@ testing_grid <- expand_grid(
 local_power_setup_grid <- cross_join(scenario_grid, testing_grid) %>%
   rowwise(everything()) %>%
   summarise(
-    B_contrast = list(working_model_contrast_f(j = j_values, k = k_values, type = working_model, time_index = time_points, Sigma = Sigma, ref = ref_working_model, params_list = params_list))
+    B_contrast = list(working_model_contrast_f(j = j_values, k = k_values, type = working_model, times = time_points, Sigma = Sigma, ref = ref_working_model, params_list = params_list))
   ) %>%
   ungroup()
 
