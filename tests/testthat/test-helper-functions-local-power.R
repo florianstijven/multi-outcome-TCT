@@ -65,13 +65,18 @@ testthat::test_that("build_omnibus_contrast_multi_outcome() and build_summing_co
   )
 })
 
-testthat::test_that("build_linear_contrast_multi_outcome() returns correct values", {
+testthat::test_that("build_linear_contrast_multi_outcome() and build_linear_contrast_common() return correct values", {
   times <- list(0:3, 0:3, 0:5)
   Sigma <- diag(1, sum(sapply(times, length)) * 2)
 
   testthat::expect_equal(
-    build_linear_contrast_multi_outcome(times, Sigma)[c(2, 3), c(16, 27)],
+    build_linear_contrast_multi_outcome(times = times, Sigma = Sigma)[c(2, 3), c(16, 27)],
     matrix(c(-1.5, 0, 0, -2), nrow = 2, byrow = TRUE)
+  )
+  
+  testthat::expect_equal(
+    build_linear_contrast_common(times = times, Sigma = Sigma)[1, c(16, 27)],
+    c(-1.5, -2), nrow = 1
   )
 })
 
@@ -82,7 +87,7 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
   params <- list(slope = c(1.1, 1.4), inflection = c(1.5, 2.2))
 
   jac_single <- jacobian_slowing_single_outcome(
-    k = k,
+    K = k,
     times = times,
     ref = "4PL",
     slope = params$slope[1],
@@ -93,8 +98,8 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
   testthat::expect_true(all(jac_single[1:(k + 1), 3] == 0))
 
   jac_multi <- jacobian_slowing_multiple_outcomes(
-    j = j,
-    k = k,
+    J = j,
+    K = k,
     times = times,
     ref = "4PL",
     params_list = params
@@ -102,8 +107,8 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
   testthat::expect_equal(dim(jac_multi), c(j * 2 * (k + 1), 3 * j))
 
   jac_multi_slow <- jacobian_slowing_multiple_outcomes(
-    j = j,
-    k = k,
+    J = j,
+    K = k,
     times = times,
     ref = "4PL",
     params_list = params,
@@ -113,8 +118,8 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
   testthat::expect_equal(jac_multi_slow, jac_multi[, seq(3, 3 * j, by = 3), drop = FALSE])
 
   jac_shared_slow <- jacobian_slowing_multiple_outcomes_shared(
-    j = j,
-    k = k,
+    J = j,
+    K = k,
     times = times,
     ref = "4PL",
     params_list = params,
@@ -132,18 +137,18 @@ testthat::test_that("mean and shift vectors are well-formed", {
 
   mu <- mean_vector(
     ref = "4PL",
-    j = j,
-    k = k,
+    J = j,
+    K = k,
     times = times,
     params_list = params
   )
   testthat::expect_length(mu, j * length(times))
   testthat::expect_true(all(mu > 0 & mu < 1))
 
-  shift <- local_shift_vector(
+  shift <- local_shift_vector_slowing_outcome(
     ref = "4PL",
-    j = j,
-    k = k,
+    J = j,
+    K = k,
     times = 0:k,
     h = c(1, 2, 3),
     params_list = params
@@ -187,15 +192,15 @@ testthat::test_that("compute_power_curve returns one row per h and monotone powe
 })
 
 
-testthat::test_that("local_shift_vector() and mean_vector() return correct values", {
+testthat::test_that("local_shift_vector_slowing_outcome() and mean_vector() return correct values", {
   j <- 3
   k <- 3
   times <- 0:k
   ref <- "4PL"
   params_list = list(inflection = c(1.0, 1.5, 3), slope = c(1.0, 1.2, 1.5))
   
-  result1 <- mean_vector(ref = ref, j = j, k = k, times = rep(times, 2), params_list = params_list)
-  result2 <- local_shift_vector(ref = ref, j = j, k = k, times = times, h = c(1, 2, 3), params_list = params_list)
+  result1 <- mean_vector(ref = ref, J = j, K = k, times = rep(times, 2), params_list = params_list)
+  result2 <- local_shift_vector_slowing_outcome(ref = ref, J = j, K = k, times = times, h = c(1, 2, 3), params_list = params_list)
   
   expected1 <- c(
     0.26894142137,
@@ -253,3 +258,5 @@ testthat::test_that("local_shift_vector() and mean_vector() return correct value
   testthat::expect_equal(result1, expected1, tolerance = 1e-10)
   testthat::expect_equal(as.numeric(result2), expected2, tolerance = 1e-10)
 })
+
+

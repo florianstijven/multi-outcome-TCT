@@ -12,6 +12,7 @@ power_from_ncp <- function(ncp, df, alpha) {
 # significance level (alpha), covariance matrix (Sigma), and base effect size (base_effect).
 compute_power_curve <- function(B, h_grid, alpha, Sigma, base_effect) {
   df = nrow(B)
+
   
   out <- data.frame(
     h = h_grid,
@@ -36,26 +37,43 @@ compute_power_curve <- function(B, h_grid, alpha, Sigma, base_effect) {
 # Local shift functions
 # ============================================================================
 
-# Compute the local effect vector (base_effect elsewhere) given the local parametric model's Jacobian.
-local_shift_vector <- function(ref = "4PL",
-                               j,
-                               k,
-                               times,
-                               h = 1,
-                               ...) {
-  # The local shift vector only depends on the Jacobian of the local parametric model.
-  if (ref == "4PL") {
-    jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, times, ref = ref, ...)
-    # Column vector that select the treatment effect parameter from the Jacobian. The non-zero entries correspond to the local treatment effects for each outcome.
-    jacobian_gamma_theta <- matrix(0, nrow = 3 * j, ncol = 1)
-    jacobian_gamma_theta[seq(3, 3 * j, by = 3), 1] <- h
-  } else if (ref == "spline") {
-    # jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, times, ref = ref, ...)
-  } else {
-    stop("Unknown reference model: ", ref)
-  }
+# Compute the local effect vector (base_effect elsewhere) given the local
+# parametric model's Jacobian.
+local_shift_vector <- function(jacobian, h) {
+
+  jacobian_gamma_theta <- matrix(0, nrow = ncol(jacobian), ncol = 1)
+  jacobian_gamma_theta[1:ncol(jacobian), 1] <- h
   
-  jacobian_local %*% jacobian_gamma_theta
+  jacobian %*% jacobian_gamma_theta
+}
+
+
+local_shift_vector_slowing_outcome <- function(ref = "4PL",
+                                               J,
+                                               K,
+                                               times,
+                                               h = 1,
+                                               params_list
+                                               ) {
+  if (!is.list(times) & !is.numeric(times)) {
+    stop("times must be a numeric vector or a list of numeric vectors.")
+  }
+  if (is.numeric(times)) {
+    times <- rep(list(times), J)
+  }
+  # number of outcomes
+  J <- length(times)
+  # number of measurements
+  no_of_measurements <- purrr::map_dbl(times, ~ length(.x)) %>%
+    sum()
+  # number of parameters for the reference trajectory for each outcome
+  no_params_ref <- length(params_list)
+  
+  # The local shift vector only depends on the Jacobian of the local parametric model.
+
+  jacobian_local <- jacobian_slowing_multiple_outcomes(J = J, K = K, times, ref = ref, params_list = params_list, slowing_only = TRUE)
+
+  local_shift_vector(jacobian_local, h)
 }
 
 mean_vector <- function(ref = "4PL",
@@ -82,17 +100,17 @@ mean_vector <- function(ref = "4PL",
 # Jacobian functions
 # ============================================================================
 
-jacobian_slowing_single_outcome <- function(k, times, ref = "4PL", ...) {
+jacobian_slowing_single_outcome <- function(K, times, ref = "4PL", ...) {
   # The 4PL model considered here has 2 parameters: the slope and the inflection point.
   # (The upper and lower asymptotes are set to 1 and 0, respectively.)
-  jacobian <- matrix(0, nrow = 2 * (k + 1), ncol = 3)
+  jacobian <- matrix(0, nrow = 2 * (K + 1), ncol = 3)
   
-  # Jacobian of the control group (first k+1 rows) with respect to the slope and inflection point parameters.
-  jacobian[1:(k + 1), 1:2] <- jacobian_ref_pm(times, ref = ref, ...)
-  # Jacobian of the treatment group (last k+1 rows) with respect to the slope and inflection point parameters.
-  jacobian[(k + 2):(2 * (k + 1)), 1:2] <- jacobian_ref_pm(times, ref = ref, ...)
-  # Jacobian of the treatment group (last k+1 rows) with respect to the treatment effect parameter (third column).
-  jacobian[(k + 2):(2 * (k + 1)), 3] <- ref_d(times, ref = ref, ...) * times
+  # Jacobian of the control group (first K+1 rows) with respect to the slope and inflection point parameters.
+  jacobian[1:(K + 1), 1:2] <- jacobian_ref_pm(times, ref = ref, ...)
+  # Jacobian of the treatment group (last K+1 rows) with respect to the slope and inflection point parameters.
+  jacobian[(K + 2):(2 * (K + 1)), 1:2] <- jacobian_ref_pm(times, ref = ref, ...)
+  # Jacobian of the treatment group (last K+1 rows) with respect to the treatment effect parameter (third column).
+  jacobian[(K + 2):(2 * (K + 1)), 3] <- ref_d(times, ref = ref, ...) * times
   
   jacobian
 }
@@ -119,65 +137,113 @@ ref_d <- function(times, ref = "4PL", ...) {
   }
 }
 
-jacobian_slowing_multiple_outcomes <- function(j,
-                                               k,
+
+
+jacobian_slowing_multiple_outcomes <- function(J,
+                                               K,
                                                times,
                                                ref = "4PL",
                                                params_list = list(),
                                                slowing_only = FALSE) {
-  jacobian <- matrix(0, nrow = j * 2 * (k + 1), ncol = 3 * j)
-  for (outcome_idx in seq_len(j)) {
-    start_row <- (outcome_idx - 1) * 2 * (k + 1) + 1
-    end_row <- start_row + 2 * (k + 1) - 1
-    start_col <- (outcome_idx - 1) * 3 + 1
-    end_col <- start_col + 2
-    
-    jacobian[start_row:end_row, start_col:end_col] <- do.call(jacobian_slowing_single_outcome, c(
-      list(
-        k = k,
-        times = times,
-        ref = ref
-      ),
+  if (!is.list(times) & !is.numeric(times)) {
+    stop("times must be a numeric vector or a list of numeric vectors.")
+  }
+  if (is.numeric(times)) {
+    times <- rep(list(times), J)
+  }
+  # number of outcomes
+  J <- length(times)
+  # number of measurements
+  no_of_measurements <- purrr::map_dbl(times, ~ length(.x)) %>%
+    sum()
+  # number of parameters for the reference trajectory for each outcome
+  no_params_ref <- length(params_list)
+  
+  jacobian <- matrix(0, nrow = no_of_measurements * 2, ncol = J * (no_params_ref + 1))
+  for (outcome_idx in seq_len(J)) {
+    K <- length(times[[outcome_idx]]) - 1
+    if (outcome_idx == 1) {
+      start_row <- 1
+      end_row <- 2 * (K + 1)
+      start_col <- 1
+      end_col <- no_params_ref + 1
+    } else {
+      start_row <- sum(purrr::map_dbl(times[1:(outcome_idx - 1)], ~ 2 * length(.x))) + 1
+      end_row <- start_row + 2 * (K + 1) - 1
+      start_col <- (outcome_idx - 1) * (no_params_ref + 1) + 1
+      end_col <- start_col + no_params_ref
+
+    }
+    jacobian[start_row:end_row, start_col:end_col] <- do.call(jacobian_slowing_single_outcome, c(list(
+      K = K,
+      times = times[[outcome_idx]],
+      ref = ref),
       purrr::map(params_list, outcome_idx)
     ))
+    
   }
   
-  # Remove all columns corresponding to the reference trajectory parameters (slope and inflection point) if slowing_only is TRUE. This leaves only the treatment effect parameters in the Jacobian.
+  # Remove all columns corresponding to the reference trajectory parameters
+  # (slope and inflection point) if slowing_only is TRUE. This leaves only the
+  # treatment effect parameters in the Jacobian.
   if (slowing_only) {
-    jacobian <- jacobian[, seq(3, 3 * j, by = 3), drop = FALSE]
+    jacobian <- jacobian[, seq(no_params_ref + 1, J * (no_params_ref + 1), by = no_params_ref + 1), drop = FALSE]
   }
   
   jacobian
 }
 
-jacobian_slowing_multiple_outcomes_shared <- function(j,
-                                                      k,
+
+jacobian_slowing_multiple_outcomes_shared <- function(J,
+                                                      K,
                                                       times,
                                                       ref = "4PL",
                                                       params_list = list(),
                                                       slowing_only = FALSE) {
-  jacobian_outcome_specific <- jacobian_slowing_multiple_outcomes(j, k, times, ref = ref, params_list = params_list)
+  if (!is.list(times) & !is.numeric(times)) {
+    stop("times must be a numeric vector or a list of numeric vectors.")
+  }
+  if (is.numeric(times)) {
+    times <- rep(list(times), J)
+  }
+  # number of outcomes
+  J <- length(times)
+  # number of measurements
+  no_of_measurements <- purrr::map_dbl(times, ~ length(.x)) %>%
+    sum()
+  # number of parameters for the reference trajectory for each outcome
+  no_params_ref <- length(params_list)
   
-  jacobian_gamma_theta <- matrix(0, nrow = 3 * j, ncol = 2 * j + 1)
+  jacobian_outcome_specific <- jacobian_slowing_multiple_outcomes(J, times = times, ref = ref, params_list = params_list)
   
-  for (outcome_idx in seq_len(j)) {
-    start_row <- (outcome_idx - 1) * 3 + 1
-    start_col <- (outcome_idx - 1) * 2 + 2
-    # We need a correction for the first outcome, since the third column of the Jacobian corresponds to the
-    # shared treatment effect parameter, which is only present in the Jacobian for the first outcome.
-    if (outcome_idx == 1)
-      start_col <- 1
+  jacobian_gamma_theta <- matrix(0,
+                                 nrow = J * (no_params_ref + 1),
+                                 ncol = J * no_params_ref + 1)
+  
+  for (outcome_idx in seq_len(J)) {
+    if (outcome_idx == 1) {
+      start_row <- 1
+      end_row <- no_params_ref + 1
+      start_col <- 2
+      end_col <- no_params_ref + 2
+    } else {
+      start_row <- (outcome_idx - 1) * (no_params_ref + 1) + 1
+      end_row <- start_row + no_params_ref
+      start_col <- (outcome_idx - 1) * no_params_ref + 2
+      end_col <- start_col + no_params_ref
+    }
     
     jacobian_gamma_theta[start_row:(start_row + 1), start_col:(start_col + 1)] <- diag(c(1, 1))
   }
-  # The third column corresponds to the treatment effect parameter, which is shared across all outcomes. Therefore, we set the corresponding entry in the Jacobian to 1 for each outcome.
-  jacobian_gamma_theta[seq(3, 3 * j, by = 3), 3] <- 1
+  # The first column corresponds to the treatment effect parameter, which is
+  # shared across all outcomes. Therefore, we set the corresponding entry in the
+  # Jacobian to 1 for each outcome.
+  jacobian_gamma_theta[seq(no_params_ref + 1, J * (no_params_ref + 1), by = no_params_ref + 1), 1] <- 1
   
   jacobian_shared <- jacobian_outcome_specific %*% jacobian_gamma_theta
-  
   # Only retain the columns corresponding to the shared treatment effect parameter (third column of the Jacobian for each outcome).
   if (slowing_only) {
-    jacobian_shared <- jacobian_shared[, 3, drop = FALSE]
+    jacobian_shared <- jacobian_shared[, 1, drop = FALSE]
   }
   jacobian_shared
 }
@@ -269,9 +335,12 @@ build_summing_contrast_multi_outcome <- function(J, K, times = NULL) {
 }
 
 # Contrast matrix for linear working model with multiple outcomes.
-build_linear_contrast_multi_outcome <- function(times, Sigma) {
-  if (!is.list(times)) {
-    stop("times must be a list of numeric vectors.")
+build_linear_contrast_multi_outcome <- function(J, K, times, Sigma) {
+  if (!is.list(times) & !is.numeric(times)) {
+    stop("times must be a numeric vector or a list of numeric vectors.")
+  }
+  if (is.numeric(times)) {
+    times <- rep(list(times), J)
   }
   # number of outcomes
   J <- length(times)
@@ -313,7 +382,7 @@ build_linear_contrast_common <- function(times, Sigma) {
   no_of_measurements <- sum(no_of_measurements_vec)
   
   jacobian <- matrix(0, nrow = 1, ncol = 2 * no_of_measurements)
-  for (outcome_idx in seq_len(j)) {
+  for (outcome_idx in seq_len(J)) {
     K <- no_of_measurements_vec[outcome_idx] - 1
     if (outcome_idx == 1) {
       start_col <- 1
@@ -321,7 +390,7 @@ build_linear_contrast_common <- function(times, Sigma) {
       start_col <- sum(purrr::map_dbl(times[1:(outcome_idx - 1)], ~ length(.x) * 2)) + 1
     }
     end_col <- start_col + K
-    
+
     jacobian[1, start_col:end_col] <- times[[outcome_idx]]
   }
   jacobian = t(jacobian)
