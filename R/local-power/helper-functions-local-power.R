@@ -182,7 +182,6 @@ jacobian_slowing_multiple_outcomes <- function(J,
     ))
     
   }
-  
   # Remove all columns corresponding to the reference trajectory parameters
   # (slope and inflection point) if slowing_only is TRUE. This leaves only the
   # treatment effect parameters in the Jacobian.
@@ -254,7 +253,8 @@ jacobian_slowing_multiple_outcomes_shared <- function(J,
 
 # Build general contrast matrix based on the Jacobian of the working model, the contrast matrix A, and the covariance matrix Sigma.
 build_contrast_matrix <- function(jacobian, A, Sigma) {
-  B_contrast <- t(A) %*% solve(A %*% Sigma %*% t(A)) %*% A %*% jacobian
+  # B_contrast <- t(A) %*% solve(A %*% Sigma %*% t(A)) %*% A %*% jacobian
+  B_contrast <- t(A) %*% MASS::ginv(A %*% Sigma %*% t(A)) %*% A %*% jacobian
   t(B_contrast)
 }
 
