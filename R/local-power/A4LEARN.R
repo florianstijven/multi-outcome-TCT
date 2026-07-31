@@ -77,7 +77,7 @@ MMSE_summary_tbl <- MMSE_tbl %>%
   ) %>%
   ungroup()
 
-problematic_items_MMSE <- c("MMAREA", "MMBALLDL", "MMFLAGDL", "MMHOSPIT", "MMBALL")
+problematic_items_MMSE <- c("MMAREA", "MMBALLDL", "MMFLAGDL", "MMHOSPIT", "MMBALL", "MMHAND")
 
 # Exclude the problematic items from the MMSE data set.
 MMSE_tbl <- MMSE_tbl %>%
@@ -106,6 +106,12 @@ CDRSB_summary_tbl <- CDRSB_tbl %>%
     se_score = sd_score / sqrt(n)
   ) %>%
   ungroup()
+
+problematic_items_CDRSB <- c("CDGLOBAL", "CDSOB")
+
+# Exclude the problematic items from the CDRSB data set.
+CDRSB_tbl <- CDRSB_tbl %>%
+  filter(!item %in% problematic_items_CDRSB)
 
 # ============================================================================
 # Data Exploration
@@ -233,31 +239,61 @@ extract_information_local_power <- function(data_set) {
   )
 }
 
-fit_4PL_model <- function(data_set) {
+fit_4PL_model <- function(data_set, lower, upper) {
   fourPL_fit <- data_set %>%
     filter(TX == "Placebo") %>%
     group_by(item) %>%
     summarise(fourPL_fit = list(
       nls(
-        score ~ 0 + 3 /
+        score ~ lower + (upper - lower) /
           (1 + (exp(
             -slope * (weeks_since_randomization - inflection)
           ))),
         data = cur_data(),
         start = list(slope = 0.001, inflection = 1000),
-        control = nls.control(maxiter = 500,, warnOnly = TRUE)
+        control = nls.control(maxiter = 500,, warnOnly = TRUE),
+        algorithm = "port"
       )
     ), .groups = "drop")
   
   fourPL_fit <- fourPL_fit %>%
     mutate(
       inflection = map_dbl(fourPL_fit, ~ coef(.x)[2]),
-      slope = map_dbl(fourPL_fit, ~ coef(.x)[1])
+      slope = map_dbl(fourPL_fit, ~ coef(.x)[1]),
+      lower = .env$lower,
+      upper = .env$upper
     ) %>%
     select(-fourPL_fit)
   
   return(fourPL_fit)
 }
+
+# Goodness of fit plot for the fitted 4PL model for each item in the data set.
+plot_4PL_fit <- function(data_set, fourPL_fit) {
+  # Extract range of time points.
+  times <- data_set %>%
+    pull(ADURW) %>%
+    unique()
+  grid_times <- seq(min(times), max(times), length.out = 100)
+  
+  # Obtain predictions from the fitted 4PL model for each item in the data set.
+  fourPL_fit <- fourPL_fit %>%
+    rowwise(everything()) %>%
+    reframe(
+      tibble(
+        weeks_since_randomization = grid_times,
+        predicted_score = lower + (upper - lower) / (1 + exp(-slope * (grid_times - inflection)))
+      )
+    )
+  
+  data_set %>%
+    filter(TX == "Placebo") %>%
+    ggplot(aes(x = ADURW, y = score)) +
+    geom_line(stat = "smooth", alpha = 0.4, color = "blue") +
+    geom_line(data = fourPL_fit %>% rename(ADURW = weeks_since_randomization), aes(x = ADURW, y = predicted_score)) +
+    facet_wrap(. ~ item) +
+    xlab("Weeks since Randomization")
+  }
 
 # Set up all scenarios for the tests whose local power is being evaluated.
 working_model_contrast_f <- function(J, K, type, times = NULL, Sigma = NULL, ref = NULL, ...) {
@@ -288,9 +324,11 @@ scenarios_tbl <- tibble(
 )
 
 scenarios_tbl <- scenarios_tbl %>%
+  mutate(lower = 0,
+         upper = ifelse(outcome == "CDRSB", 3, 1)) %>%
   mutate(
     information = map(data_set, extract_information_local_power),
-    fourPL_fit = map(data_set, fit_4PL_model)
+    fourPL_fit = pmap(.l = list(data_set = data_set, lower = lower, upper = upper), fit_4PL_model)
   ) %>%
   mutate(
     times = map(information, ~ .x$times),
@@ -301,6 +339,36 @@ scenarios_tbl <- scenarios_tbl %>%
     K = map_dbl(times, ~ length(.x) - 1),
     A = list(build_omnibus_contrast_multi_outcome(J = J, K = K))
   )
+
+# Save goodness of fit plots for the fitted 4PL model for each item in the data
+# set.
+scenarios_tbl %>%
+  rowwise() %>%
+  summarise(
+    plot_4PL_fit = list(plot_4PL_fit(data_set = data_set, fourPL_fit = fourPL_fit)),
+    plot_filename = file.path(figures_dir, paste0("4PL_fit_", outcome, ".pdf")),
+    save_plot = {
+      ggsave(
+        filename = plot_filename,
+        plot = plot_4PL_fit,
+        width = double_width,
+        height = double_height,
+        dpi = res,
+        unit = unit
+      )
+      TRUE
+    }
+  ) %>%
+  ungroup()
+
+# Ensure the covariance matrices are positive semi-definite. If not, adjust them
+# to be positive semi-definite.
+scenarios_tbl <- scenarios_tbl %>%
+  rowwise() %>%
+  mutate(
+    Sigma = list(as.matrix(Matrix::nearPD(Sigma)$mat))
+  ) %>%
+  ungroup()
 
 # Compute local shift vectors for each scenario based on the reference model and local alternative type.
 scenarios_tbl <- scenarios_tbl %>%
@@ -345,6 +413,7 @@ local_power_grid <- local_power_setup_grid %>%
   )
 
 local_power_grid %>%
+  filter(ifelse(outcome == "CDRSB", TRUE, h <= 3)) %>%
   ggplot(aes(x = h, y = power, color = working_model)) +
   geom_line() +
   facet_grid(. ~ outcome, scales = "free") +
@@ -357,5 +426,6 @@ local_power_grid %>%
   theme(legend.position = "bottom")
 
 ggsave(filename = file.path(figures_dir, "local_power_curves_A4LEARN.pdf"), width = double_width, height = single_height, dpi = res, unit = unit)
+
 
 
