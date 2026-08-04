@@ -25,7 +25,13 @@ scenario_grid <- scenario_grid %>%
     Sigma = list(cov_list$Sigma),
     time_points = list(cov_list$time_points),
     A = list(build_omnibus_contrast_multi_outcome(K, J)),
-    params_list = list(list(inflection = 3 + 3 * (1:J - 1) / (2 * J), slope = 1 + (1:J - 1) / J)),
+    params_list = list(purrr::map(
+      seq_len(J),
+      ~ list(
+        inflection = 3 + 3 * (.x - 1) / (2 * J),
+        slope = 1 + (.x - 1) / J
+      )
+    )),
     mean_vec = list(mean_vector(ref = ref, J = J, K = K, times = rep(time_points, 2), params_list = params_list)),
     Sigma = list(unlist(diag(sqrt(mean_vec * (1 - mean_vec))) %*% Sigma %*% diag(sqrt(mean_vec * (1 - mean_vec))))),
   ) %>%

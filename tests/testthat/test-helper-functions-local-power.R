@@ -14,10 +14,11 @@ testthat::test_that("4PL reference helpers return expected shapes and ranges", {
   times <- 0:4
   slope <- 1.2
   inflection <- 2.0
+  params <- c(inflection, slope)
 
-  curve <- function_4PL(times, slope = slope, inflection = inflection)
-  jac <- jacobian_4PL(times, slope = slope, inflection = inflection)
-  d_time <- time_d_4PL(times, slope = slope, inflection = inflection)
+  curve <- function_4PL(times, params)
+  jac <- jacobian_4PL(times, params)
+  d_time <- time_d_4PL(times, params)
 
   testthat::expect_length(curve, length(times))
   testthat::expect_true(all(curve > 0 & curve < 1))
@@ -27,15 +28,77 @@ testthat::test_that("4PL reference helpers return expected shapes and ranges", {
 
 testthat::test_that("nc spline reference helpers return expected shapes and ranges", {
   times <- 0:8
-  coeffs <- 1:5
+  params <- 1:5
+  boundary_knots <- range(times)
 
-  t <- build_nc_spline_basis(times = times, knots = 1:3, coeffs = coeffs)
-  curve <- function_nc_spline(times, knots = 1:3, coeffs = coeffs)
-  jac <- jacobian_nc_spline(times, knots = 1:3, coeffs = coeffs)
-  d_time <- time_d_nc_spline(times, knots = 1:3, coeffs = coeffs)
+  t <- build_nc_spline_basis(times = times, knots = 1:3, boundary_knots = boundary_knots, params = params)
+  curve <- function_nc_spline(times, knots = 1:3, boundary_knots = boundary_knots, params = params)
+  jac <- jacobian_nc_spline(times, knots = 1:3, boundary_knots = boundary_knots, params = params)
+  d_time <- time_d_nc_spline(times, knots = 1:3, boundary_knots = boundary_knots, params = params)
 
   testthat::expect_length(curve, length(times))
-  testthat::expect_equal(dim(jac), c(length(times), length(coeffs)))
+  testthat::expect_equal(dim(jac), c(length(times), length(params)))
+})
+
+testthat::test_that("nc spline helpers enforce boundary_knots input", {
+  times <- 0:8
+  params <- 1:5
+  internal_knots <- 1:3
+
+  testthat::expect_error(
+    build_nc_spline_basis(times = times, knots = internal_knots, params = params),
+    "argument \"boundary_knots\" is missing"
+  )
+  testthat::expect_error(
+    function_nc_spline(times = times, knots = internal_knots, params = params),
+    "argument \"boundary_knots\" is missing"
+  )
+  testthat::expect_error(
+    jacobian_nc_spline(times = times, knots = internal_knots, params = params),
+    "argument \"boundary_knots\" is missing"
+  )
+  testthat::expect_error(
+    time_d_nc_spline(times = times, knots = internal_knots, params = params),
+    "argument \"boundary_knots\" is missing"
+  )
+
+  bad_boundary_knots <- c(0, 4, 8)
+  testthat::expect_error(
+    build_nc_spline_basis(
+      times = times,
+      knots = internal_knots,
+      boundary_knots = bad_boundary_knots,
+      params = params
+    ),
+    "boundary knots must be a numeric vector of length 2"
+  )
+  testthat::expect_error(
+    function_nc_spline(
+      times = times,
+      knots = internal_knots,
+      boundary_knots = bad_boundary_knots,
+      params = params
+    ),
+    "boundary knots must be a numeric vector of length 2"
+  )
+  testthat::expect_error(
+    jacobian_nc_spline(
+      times = times,
+      knots = internal_knots,
+      boundary_knots = bad_boundary_knots,
+      params = params
+    ),
+    "boundary knots must be a numeric vector of length 2"
+  )
+  testthat::expect_error(
+    time_d_nc_spline(
+      times = times,
+      knots = internal_knots,
+      boundary_knots = bad_boundary_knots,
+      params = params
+    ),
+    "boundary knots must be a numeric vector of length 2"
+  )
 })
 
 
@@ -99,14 +162,16 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
   j <- 2
   k <- 3
   times <- 0:k
-  params <- list(slope = c(1.1, 1.4), inflection = c(1.5, 2.2))
+  params_list <- list(
+    c(1.5, 1.1),
+    c(2.2, 1.4)
+  )
 
   jac_single <- jacobian_slowing_single_outcome(
     K = k,
     times = times,
     ref = "4PL",
-    slope = params$slope[1],
-    inflection = params$inflection[1]
+    params = params_list[[1]]
   )
 
   testthat::expect_equal(dim(jac_single), c(2 * (k + 1), 3))
@@ -117,7 +182,7 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
     K = k,
     times = times,
     ref = "4PL",
-    params_list = params
+    params_list = params_list
   )
   testthat::expect_equal(dim(jac_multi), c(j * 2 * (k + 1), 3 * j))
 
@@ -126,7 +191,7 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
     K = k,
     times = times,
     ref = "4PL",
-    params_list = params,
+    params_list = params_list,
     slowing_only = TRUE
   )
   testthat::expect_equal(dim(jac_multi_slow), c(j * 2 * (k + 1), j))
@@ -137,7 +202,7 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
     K = k,
     times = times,
     ref = "4PL",
-    params_list = params,
+    params_list = params_list,
     slowing_only = TRUE
   )
   testthat::expect_equal(dim(jac_shared_slow), c(j * 2 * (k + 1), 1))
@@ -148,14 +213,18 @@ testthat::test_that("mean and shift vectors are well-formed", {
   j <- 3
   k <- 2
   times <- rep(0:k, 2)
-  params <- list(slope = c(1.0, 1.2, 1.5), inflection = c(1.0, 1.5, 2.0))
+  params_list <- list(
+    c(1, 1),
+    c(1.5, 1.2),
+    c(2, 1.5)
+  )
 
   mu <- mean_vector(
     ref = "4PL",
     J = j,
     K = k,
     times = times,
-    params_list = params
+    params_list = params_list
   )
   testthat::expect_length(mu, j * length(times))
   testthat::expect_true(all(mu > 0 & mu < 1))
@@ -166,7 +235,7 @@ testthat::test_that("mean and shift vectors are well-formed", {
     K = k,
     times = 0:k,
     h = c(1, 2, 3),
-    params_list = params
+    params_list = params_list
   )
   testthat::expect_equal(dim(shift), c(j * 2 * (k + 1), 1))
 })
@@ -212,10 +281,27 @@ testthat::test_that("local_shift_vector_slowing_outcome() and mean_vector() retu
   k <- 3
   times <- 0:k
   ref <- "4PL"
-  params_list = list(inflection = c(1.0, 1.5, 3), slope = c(1.0, 1.2, 1.5))
+  params_list <- list(
+    c(1, 1),
+    c(1.5, 1.2),
+    c(3, 1.5)
+  )
   
-  result1 <- mean_vector(ref = ref, J = j, K = k, times = rep(times, 2), params_list = params_list)
-  result2 <- local_shift_vector_slowing_outcome(ref = ref, J = j, K = k, times = times, h = c(1, 2, 3), params_list = params_list)
+  result1 <- mean_vector(
+    ref = ref,
+    J = j,
+    K = k,
+    times = rep(times, 2),
+    params_list = params_list
+  )
+  result2 <- local_shift_vector_slowing_outcome(
+    ref = ref,
+    J = j,
+    K = k,
+    times = times,
+    h = c(1, 2, 3),
+    params_list = params_list
+  )
   
   expected1 <- c(
     0.26894142137,
@@ -274,10 +360,72 @@ testthat::test_that("local_shift_vector_slowing_outcome() and mean_vector() retu
   testthat::expect_equal(as.numeric(result2), expected2, tolerance = 1e-10)
 
   ref <- "nc_spline"
-  params_list = list(knots = list(c(1, 2), c(1, 2), c(1, 2)), coeffs = list(c(0.5, 1.0, 1.5, 2), c(0.5, 1.0, 1.5, 2), c(0.5, 1.0, 1.5, 2)))
+  params_list <- list(
+    c(0.5, 1.0, 1.5, 2),
+    c(0.5, 1.0, 1.5, 2),
+    c(0.5, 1.0, 1.5, 2)
+  )
 
-  result3 <- mean_vector(ref = ref, J = j, K = k, times = rep(times, 2), params_list = params_list)
-  # result4 <- local_shift_vector_slowing_outcome(ref = ref, J = j, K = k, times = times, h = c(1, 2, 3), params_list = params_list)
+  result3 <- mean_vector(
+    ref = ref,
+    J = j,
+    K = k,
+    times = rep(times, 2),
+    params_list = params_list,
+    knots = c(1.5, 2.5),
+    boundary_knots = range(times)
+  )
+  result4 <- local_shift_vector_slowing_outcome(
+    ref = ref,
+    J = j,
+    K = k,
+    times = times,
+    h = c(1, 2, 3),
+    params_list = params_list,
+    knots = c(1.5, 2.5),
+    boundary_knots = range(times)
+  )
 })
+# 
+# testthat::test_that("jacobian constructors support different parameter counts per outcome", {
+#   times <- list(0:3, 0:4)
+#   j <- length(times)
+#   params <- list(
+#     list(knots = c(1.5), coeffs = c(0.2, 0.4, 0.6)),
+#     list(knots = c(1.5, 2.5), coeffs = c(0.2, 0.4, 0.6, 0.8))
+#   )
+# 
+#   jac_multi <- jacobian_slowing_multiple_outcomes(
+#     J = j,
+#     K = NULL,
+#     times = times,
+#     ref = "nc_spline",
+#     params_list = params
+#   )
+# 
+#   # outcome 1: 3 spline coefficients + 1 slowing; outcome 2: 4 coefficients + 1 slowing
+#   testthat::expect_equal(ncol(jac_multi), 9)
+#   testthat::expect_equal(nrow(jac_multi), 2 * (length(times[[1]]) + length(times[[2]])))
+# 
+#   jac_multi_slow <- jacobian_slowing_multiple_outcomes(
+#     J = j,
+#     K = NULL,
+#     times = times,
+#     ref = "nc_spline",
+#     params_list = params,
+#     slowing_only = TRUE
+#   )
+#   testthat::expect_equal(dim(jac_multi_slow), c(nrow(jac_multi), j))
+# 
+#   jac_shared <- jacobian_slowing_multiple_outcomes_shared(
+#     J = j,
+#     K = NULL,
+#     times = times,
+#     ref = "nc_spline",
+#     params_list = params,
+#     slowing_only = TRUE
+#   )
+#   testthat::expect_equal(dim(jac_shared), c(nrow(jac_multi), 1))
+# })
 
 

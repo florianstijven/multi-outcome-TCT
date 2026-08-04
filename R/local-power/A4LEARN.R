@@ -5,7 +5,7 @@ figures_dir <- "results/local-power/figures/"
 
 # ============================================================================
 # Data Preparation
-# ============================================================================ 
+# ============================================================================
 
 clinical_data <- A4LEARN::ADQS %>%
   filter(EPOCH %in% c("BLINDED TREATMENT", "SCREENING"))
@@ -17,7 +17,7 @@ clinical_data <- clinical_data %>%
     weeks_since_randomization = as.numeric(weeks_since_randomization),
     weeks_since_randomization = ifelse(str_detect(VISIT, "Baseline"), 0, weeks_since_randomization),
     weeks_since_randomization = ifelse(str_detect(VISIT, "Screening"), -1, weeks_since_randomization)
-    ) %>%
+  ) %>%
   # Remove missing values in weeks_since_randomization. These are visits
   # corresponding to early termination visits.
   filter(!is.na(weeks_since_randomization)) %>%
@@ -39,7 +39,7 @@ clinical_data <- clinical_data %>%
       any(weeks_since_randomization == 0)
   )) %>%
   mutate(weeks_since_randomization = pmax(0, weeks_since_randomization))
-  
+
 # Compute time- and treatment group specific means and standard deviations for
 # each test.
 clinical_data_summary <- clinical_data %>%
@@ -77,7 +77,12 @@ MMSE_summary_tbl <- MMSE_tbl %>%
   ) %>%
   ungroup()
 
-problematic_items_MMSE <- c("MMAREA", "MMBALLDL", "MMFLAGDL", "MMHOSPIT", "MMBALL", "MMHAND")
+problematic_items_MMSE <- c("MMAREA",
+                            "MMBALLDL",
+                            "MMFLAGDL",
+                            "MMHOSPIT",
+                            "MMBALL",
+                            "MMHAND")
 
 # Exclude the problematic items from the MMSE data set.
 MMSE_tbl <- MMSE_tbl %>%
@@ -115,32 +120,49 @@ CDRSB_tbl <- CDRSB_tbl %>%
 
 # ============================================================================
 # Data Exploration
-# ============================================================================ 
+# ============================================================================
 
 clinical_data_summary %>%
-  ggplot(aes(x=weeks_since_randomization, y=mean_score, color=TX)) +
+  ggplot(aes(x = weeks_since_randomization, y = mean_score, color = TX)) +
   geom_line() +
   geom_point() +
-  geom_errorbar(aes(ymin=mean_score-se_score, ymax=mean_score+se_score), width=0.2) +
+  geom_errorbar(aes(ymin = mean_score - se_score, ymax = mean_score + se_score),
+                width = 0.2) +
   facet_wrap(. ~ QSTESTCD, scales = "free") +
   xlab("Weeks since Randomization") +
   ylab("Mean Score") +
   theme(legend.position = "bottom")
 
-ggsave(filename = file.path(figures_dir, "mean_scores_over_time.pdf"), width = double_width, height = double_height, dpi = res, unit = unit)
+ggsave(
+  filename = file.path(figures_dir, "mean_scores_over_time.pdf"),
+  width = double_width,
+  height = double_height,
+  dpi = res,
+  unit = unit
+)
 
 MMSE_summary_tbl %>%
   filter(weeks_since_randomization >= 0) %>%
   ggplot(aes(x = weeks_since_randomization, y = mean_score, color = TX)) +
   geom_line() +
   geom_point() +
-  geom_errorbar(aes(ymin=mean_score - 1.96 * se_score, ymax=mean_score + 1.96 * se_score), width=0.2) +
+  geom_errorbar(aes(
+    ymin = mean_score - 1.96 * se_score,
+    ymax = mean_score + 1.96 * se_score
+  ),
+  width = 0.2) +
   facet_wrap(. ~ item) +
   xlab("Weeks since Randomization") +
   ylab("Mean Score") +
   theme(legend.position = "bottom")
 
-ggsave(filename = file.path(figures_dir, "mean_scores_over_time_MMSE.pdf"), width = double_width, height = double_height, dpi = res, unit = unit)
+ggsave(
+  filename = file.path(figures_dir, "mean_scores_over_time_MMSE.pdf"),
+  width = double_width,
+  height = double_height,
+  dpi = res,
+  unit = unit
+)
 
 
 CDRSB_summary_tbl %>%
@@ -157,13 +179,19 @@ CDRSB_summary_tbl %>%
   ylab("Mean Score") +
   theme(legend.position = "bottom")
 
-ggsave(filename = file.path(figures_dir, "mean_scores_over_time_CDRSB.pdf"), width = double_width, height = double_height, dpi = res, unit = unit)
+ggsave(
+  filename = file.path(figures_dir, "mean_scores_over_time_CDRSB.pdf"),
+  width = double_width,
+  height = double_height,
+  dpi = res,
+  unit = unit
+)
 
 problematic_items_CDRSB <- c("CARE")
 
 # ============================================================================
 # Local Power
-# ============================================================================ 
+# ============================================================================
 
 source("R/local-power/helper-functions-local-power.R")
 
@@ -189,7 +217,7 @@ extract_information_local_power <- function(data_set) {
     )) %>%
     arrange(TX, weeks_since_randomization)
   
-  m_tilde <- m_tilde %>% 
+  m_tilde <- m_tilde %>%
     pivot_wider(
       names_from = c("weeks_since_randomization", "TX"),
       values_from = starts_with("SCORE_"),
@@ -202,12 +230,17 @@ extract_information_local_power <- function(data_set) {
     group_by(BID) %>%
     filter(all(!is.na(score))) %>%
     ungroup() %>%
-    pivot_wider(names_from = c("item"),
-                values_from = "score",
-                names_prefix = "SCORE_") %>%
-    select(
-      c(starts_with("SCORE_"), "weeks_since_randomization", "TX", "BID")
+    pivot_wider(
+      names_from = c("item"),
+      values_from = "score",
+      names_prefix = "SCORE_"
     ) %>%
+    select(c(
+      starts_with("SCORE_"),
+      "weeks_since_randomization",
+      "TX",
+      "BID"
+    )) %>%
     pivot_wider(
       names_from = c("weeks_since_randomization", "TX"),
       values_from = starts_with("SCORE_"),
@@ -230,13 +263,11 @@ extract_information_local_power <- function(data_set) {
     stop("Row names of covariance matrix do not match row names of mean vector.")
   }
   
-  return(
-    list(
-      times = times,
-      m_tilde = m_tilde,
-      Sigma = Sigma
-    )
-  )
+  return(list(
+    times = times,
+    m_tilde = m_tilde,
+    Sigma = Sigma
+  ))
 }
 
 fit_4PL_model <- function(data_set, lower, upper) {
@@ -251,7 +282,7 @@ fit_4PL_model <- function(data_set, lower, upper) {
           ))),
         data = cur_data(),
         start = list(slope = 0.001, inflection = 1000),
-        control = nls.control(maxiter = 500,, warnOnly = TRUE),
+        control = nls.control(maxiter = 500, , warnOnly = TRUE),
         algorithm = "port"
       )
     ), .groups = "drop")
@@ -279,34 +310,104 @@ plot_4PL_fit <- function(data_set, fourPL_fit) {
   # Obtain predictions from the fitted 4PL model for each item in the data set.
   fourPL_fit <- fourPL_fit %>%
     rowwise(everything()) %>%
-    reframe(
-      tibble(
-        weeks_since_randomization = grid_times,
-        predicted_score = lower + (upper - lower) / (1 + exp(-slope * (grid_times - inflection)))
-      )
-    )
+    reframe(tibble(
+      weeks_since_randomization = grid_times,
+      predicted_score = lower + (upper - lower) / (1 + exp(-slope * (
+        grid_times - inflection
+      )))
+    ))
   
   data_set %>%
     filter(TX == "Placebo") %>%
     ggplot(aes(x = ADURW, y = score)) +
-    geom_line(stat = "smooth", alpha = 0.4, color = "blue") +
-    geom_line(data = fourPL_fit %>% rename(ADURW = weeks_since_randomization), aes(x = ADURW, y = predicted_score)) +
+    geom_line(stat = "smooth",
+              alpha = 0.4,
+              color = "blue") +
+    geom_line(
+      data = fourPL_fit %>% rename(ADURW = weeks_since_randomization),
+      aes(x = ADURW, y = predicted_score)
+    ) +
     facet_wrap(. ~ item) +
     xlab("Weeks since Randomization")
-  }
+}
+
+plot_nc_spline_fit <- function(data_set, fourPL_fit, params_list, times) {
+  # Extract range of time points.
+  ADURW <- data_set %>%
+    pull(ADURW) %>%
+    unique()
+  grid_times <- seq(min(ADURW), max(ADURW), length.out = 100)
+  
+  # Natural cubic splines basis.
+  nc_spline_basis <- build_nc_spline_basis(
+    times = grid_times[50:60],
+    knots = times[c(-1, -length(times))],
+    boundary_knots = range(times)
+  )
+  
+  # Obtain predictions from the fitted natural cubic spline model for each item in the data set.
+  nc_spline_fit <- fourPL_fit %>%
+    mutate(params_nc_spline = params_list) %>%
+    rowwise(everything()) %>%
+    reframe(tibble(
+      weeks_since_randomization = grid_times,
+      predicted_score = build_nc_spline_basis(
+        grid_times,
+        knots = times[c(-1, -length(times))],
+        boundary_knots = range(times)
+      ) %*% params_nc_spline,
+      four_PL_curve = lower + (upper - lower) / (1 + exp(-slope * (
+        grid_times - inflection
+      )))
+    ))
+  
+  nc_spline_fit %>%
+    ggplot(aes(x = weeks_since_randomization, y = four_PL_curve)) +
+    geom_line(color = "blue") +
+    geom_line(
+      data = nc_spline_fit %>% rename(ADURW = weeks_since_randomization),
+      aes(x = ADURW, y = predicted_score)
+    ) +
+    facet_wrap(. ~ item) +
+    xlab("Weeks since Randomization")
+}
 
 # Set up all scenarios for the tests whose local power is being evaluated.
-working_model_contrast_f <- function(J, K, type, times = NULL, Sigma = NULL, ref = NULL, ...) {
+working_model_contrast_f <- function(J,
+                                     K,
+                                     type,
+                                     times = NULL,
+                                     Sigma = NULL,
+                                     ref_working_model = NULL,
+                                     params_list_working_model = NULL) {
   A = build_omnibus_contrast_multi_outcome(J, K)
   if (type == "omnibus") {
     A
   } else if (type == "linear") {
     return(build_linear_contrast_multi_outcome(J, K, times = times, Sigma = Sigma))
   } else if (type == "slowing_outcome") {
-    jacobian <- jacobian_slowing_multiple_outcomes(J = J, K = K, times = times, ref = ref, slowing_only = TRUE, ...)
+    jacobian <- jacobian_slowing_multiple_outcomes(
+      J = J,
+      K = K,
+      times = times,
+      ref = ref_working_model,
+      slowing_only = TRUE,
+      params_list = params_list_working_model,
+      knots = times[c(-1, -length(times))],
+      boundary_knots = range(times)
+    )
     return(build_contrast_matrix(jacobian, A = A, Sigma = Sigma))
   } else if (type == "slowing_shared") {
-    jacobian <- jacobian_slowing_multiple_outcomes_shared(J = J, K = K, times = times, ref = ref, slowing_only = TRUE, ...)
+    jacobian <- jacobian_slowing_multiple_outcomes_shared(
+      J = J,
+      K = K,
+      times = times,
+      ref = ref_working_model,
+      slowing_only = TRUE,
+      params_list = params_list_working_model,
+      knots = times[c(-1, -length(times))],
+      boundary_knots = range(times)
+    )
     return(build_contrast_matrix(jacobian, A = A, Sigma = Sigma))
   } else if (type == "summing") {
     A_sum = build_summing_contrast_multi_outcome(J, K)
@@ -318,26 +419,74 @@ working_model_contrast_f <- function(J, K, type, times = NULL, Sigma = NULL, ref
 
 
 
-scenarios_tbl <- tibble(
-  outcome = c("CDRSB", "MMSE"),
-  data_set = list(CDRSB_tbl, MMSE_tbl)
-)
+# Function to compute the parameters for the working model for the reference
+# trajectory based on the true reference trajectory. We currently assume that
+# the true reference trajectory is a 4PL curve.
+params_list_working_model <- function(ref_working_model,
+                                      ref,
+                                      params_list,
+                                      times, lower, upper) {
+  if (ref != "4PL") {
+    stop("Reference trajectory must be a 4PL curve.")
+  }
+  
+  if (ref_working_model == "4PL") {
+    return(params_list)
+  } else if (ref_working_model == "nc_spline") {
+    # Fit the natural cubic spline model to the reference trajectory at the
+    # observed time points.
+    params_list_working_model <- purrr::map(
+      .x = params_list,
+      .f = function(params) {
+        predicted_score <- do.call(function_4PL, c(list(times), list(params)))
+        predicted_score <- lower + (upper - lower) * predicted_score
+        spline_basis <- build_nc_spline_basis(
+          times,
+          knots = times[c(-1, -length(times))],
+          boundary_knots = range(times)
+        )
+        spline_coefs <- coef(lm(predicted_score ~ spline_basis - 1))
+        
+        return(spline_coefs)
+      }
+    )
+  } else {
+    stop("Unknown reference working model: ", ref_working_model)
+  }
+  
+}
+
+
+
+scenarios_tbl <- tibble(outcome = c("CDRSB", "MMSE"),
+                        data_set = list(CDRSB_tbl, MMSE_tbl))
 
 scenarios_tbl <- scenarios_tbl %>%
-  mutate(lower = 0,
-         upper = ifelse(outcome == "CDRSB", 3, 1)) %>%
+  mutate(lower = 0, upper = ifelse(outcome == "CDRSB", 3, 1)) %>%
   mutate(
     information = map(data_set, extract_information_local_power),
-    fourPL_fit = pmap(.l = list(data_set = data_set, lower = lower, upper = upper), fit_4PL_model)
+    fourPL_fit = pmap(
+      .l = list(
+        data_set = data_set,
+        lower = lower,
+        upper = upper
+      ),
+      fit_4PL_model
+    )
   ) %>%
   mutate(
     times = map(information, ~ .x$times),
     m_tilde = map(information, ~ .x$m_tilde),
     Sigma = map(information, ~ .x$Sigma),
-    params_list = map(fourPL_fit, ~ list(inflection = .x$inflection, slope = .x$slope)),
+    params_list = map(fourPL_fit, ~ purrr::pmap(
+      .l = list(inflection = .x$inflection, slope = .x$slope),
+      .f = function(inflection, slope)
+        c(inflection = inflection, slope = slope)
+    )),
     J = map_dbl(fourPL_fit, ~ nrow(.x)),
     K = map_dbl(times, ~ length(.x) - 1),
-    A = list(build_omnibus_contrast_multi_outcome(J = J, K = K))
+    A = list(build_omnibus_contrast_multi_outcome(J = J, K = K)),
+    ref = "4PL"
   )
 
 # Save goodness of fit plots for the fitted 4PL model for each item in the data
@@ -345,7 +494,9 @@ scenarios_tbl <- scenarios_tbl %>%
 scenarios_tbl %>%
   rowwise() %>%
   summarise(
-    plot_4PL_fit = list(plot_4PL_fit(data_set = data_set, fourPL_fit = fourPL_fit)),
+    plot_4PL_fit = list(plot_4PL_fit(
+      data_set = data_set, fourPL_fit = fourPL_fit
+    )),
     plot_filename = file.path(figures_dir, paste0("4PL_fit_", outcome, ".pdf")),
     save_plot = {
       ggsave(
@@ -365,43 +516,88 @@ scenarios_tbl %>%
 # to be positive semi-definite.
 scenarios_tbl <- scenarios_tbl %>%
   rowwise() %>%
-  mutate(
-    Sigma = list(as.matrix(Matrix::nearPD(Sigma)$mat))
-  ) %>%
+  mutate(Sigma = list(as.matrix(Matrix::nearPD(Sigma)$mat))) %>%
   ungroup()
 
 # Compute local shift vectors for each scenario based on the reference model and local alternative type.
 scenarios_tbl <- scenarios_tbl %>%
   rowwise() %>%
-  mutate(
-    h = 1,
-    local_shift = list(local_shift_vector_slowing_outcome(ref = ref, J = J, times = times, h = h, params_list = params_list))
-  )
+  mutate(h = 1,
+         local_shift = list(
+           local_shift_vector_slowing_outcome(
+             ref = "4PL",
+             J = J,
+             times = times,
+             h = h,
+             params_list = params_list
+           )
+         ))
 
 testing_grid <- expand_grid(
-  ref_working_model = "4PL",
+  ref_working_model = c("4PL", "nc_spline"),
   working_model = c("slowing_shared", "slowing_outcome", "summing")
 )
 
 local_power_setup_grid <- cross_join(scenarios_tbl, testing_grid) %>%
   rowwise(everything()) %>%
-  summarise(B_contrast = list(
-    working_model_contrast_f(
-      J = J,
-      K = K,
-      type = working_model,
+  summarise(
+    params_list_working_model = params_list_working_model(
+      ref_working_model = ref_working_model,
+      ref = ref,
+      params_list = params_list,
       times = times,
-      Sigma = Sigma,
-      ref = ref_working_model,
-      params_list = params_list
+      lower = lower,
+      upper = upper
+    ) %>% list(),
+    B_contrast = list(
+      working_model_contrast_f(
+        J = J,
+        K = K,
+        type = working_model,
+        times = times,
+        Sigma = Sigma,
+        ref_working_model = ref_working_model,
+        params_list = params_list_working_model
+      )
     )
-  )) %>%
+  ) %>%
   ungroup()
+
+
+# Save goodness of fit plots for the fitted 4PL model VS natural cubic splines
+# for each item in the data set.
+local_power_setup_grid %>%
+  filter(ref_working_model == "nc_spline") %>%
+  group_by(outcome, ref_working_model) %>%
+  slice_head(n = 1) %>%
+  rowwise() %>%
+  summarise(
+    plot_nc_spline_fit = list(plot_nc_spline_fit(
+      data_set = data_set,
+      fourPL_fit = fourPL_fit,
+      params_list = params_list_working_model,
+      times = times
+    )),
+    plot_filename = file.path(figures_dir, paste0("nc_spline_fit_", outcome, "_", ref_working_model, ".pdf")),
+    save_plot = {
+      ggsave(
+        filename = plot_filename,
+        plot = plot_nc_spline_fit,
+        width = double_width,
+        height = double_height,
+        dpi = res,
+        unit = unit
+      )
+      TRUE
+    }
+  ) %>%
+  ungroup()
+  
 
 h_grid <- c(seq(0, 4, length.out = 1e3), seq(4, 20, length.out = 1e3)) %>% unique()
 
 local_power_grid <- local_power_setup_grid %>%
-  rowwise(outcome, working_model) %>%
+  rowwise(outcome, working_model, ref_working_model) %>%
   reframe(
     compute_power_curve(
       B = B_contrast,
@@ -414,7 +610,12 @@ local_power_grid <- local_power_setup_grid %>%
 
 local_power_grid %>%
   filter(ifelse(outcome == "CDRSB", TRUE, h <= 3)) %>%
-  ggplot(aes(x = h, y = power, color = working_model)) +
+  ggplot(aes(
+    x = h,
+    y = power,
+    color = working_model,
+    linetype = ref_working_model
+  )) +
   geom_line() +
   facet_grid(. ~ outcome, scales = "free") +
   labs(
@@ -425,7 +626,12 @@ local_power_grid %>%
   ) +
   theme(legend.position = "bottom")
 
-ggsave(filename = file.path(figures_dir, "local_power_curves_A4LEARN.pdf"), width = double_width, height = single_height, dpi = res, unit = unit)
-
+ggsave(
+  filename = file.path(figures_dir, "local_power_curves_A4LEARN.pdf"),
+  width = double_width,
+  height = single_height,
+  dpi = res,
+  unit = unit
+)
 
 

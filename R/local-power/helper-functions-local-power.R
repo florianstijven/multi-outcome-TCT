@@ -47,14 +47,24 @@ local_shift_vector <- function(jacobian, h) {
   jacobian %*% jacobian_gamma_theta
 }
 
+validate_params_list <- function(params_list, J) {
+  if (!is.list(params_list)) {
+    stop("params_list must be a list.")
+  }
+  if (length(params_list) != J) {
+    stop("params_list must contain exactly one element per outcome (length J).")
+  }
+}
+
+
 
 local_shift_vector_slowing_outcome <- function(ref = "4PL",
                                                J,
                                                K,
                                                times,
                                                h = 1,
-                                               params_list
-                                               ) {
+                                               params_list,
+                                               ...) {
   if (!is.list(times) & !is.numeric(times)) {
     stop("times must be a numeric vector or a list of numeric vectors.")
   }
@@ -63,33 +73,56 @@ local_shift_vector_slowing_outcome <- function(ref = "4PL",
   }
   # number of outcomes
   J <- length(times)
-  # number of measurements
-  no_of_measurements <- purrr::map_dbl(times, ~ length(.x)) %>%
-    sum()
-  # number of parameters for the reference trajectory for each outcome
-  no_params_ref <- length(params_list)
+  validate_params_list(params_list, J)
   
   # The local shift vector only depends on the Jacobian of the local parametric model.
-
-  jacobian_local <- jacobian_slowing_multiple_outcomes(J = J, K = K, times, ref = ref, params_list = params_list, slowing_only = TRUE)
-
+  
+  jacobian_local <- jacobian_slowing_multiple_outcomes(
+    J = J,
+    K = K,
+    times,
+    ref = ref,
+    params_list = params_list,
+    slowing_only = TRUE,
+    ...
+  )
+  
   local_shift_vector(jacobian_local, h)
 }
 
 mean_vector <- function(ref = "4PL",
-                        j,
-                        k,
+                        J,
+                        K,
                         times,
                         params_list = list(),
                         ...) {
+  if (!is.list(params_list)) {
+    stop("params_list must be a list.")
+  }
+  J <- length(params_list)
+  if (J == 0) {
+    stop("params_list must not be empty.")
+  }
+
+  if (is.list(times)) {
+    if (length(times) != J) {
+      stop("When times is a list, it must contain one numeric vector per outcome.")
+    }
+    times_list <- times
+  } else if (is.numeric(times)) {
+    times_list <- rep(list(times), J)
+  } else {
+    stop("times must be a numeric vector or a list of numeric vectors.")
+  }
+
   if (ref == "4PL") {
-    mean_vector_dbl <- purrr::map2(params_list$slope, params_list$inflection, function(slope, inflection) {
-      function_4PL(times, slope = slope, inflection = inflection)
+    mean_vector_dbl <- purrr::map2(times_list, params_list, function(outcome_times, outcome_params) {
+      do.call(function_4PL, list(times = outcome_times, outcome_params))
     }) %>%
       do.call(c, .)
   } else if (ref == "nc_spline") {
-    mean_vector_dbl <- purrr::map2(params_list$knots, params_list$coeffs, function(knots, coeffs) {
-      function_nc_spline(times, knots = knots, coeffs = coeffs)
+    mean_vector_dbl <- purrr::map2(times_list, params_list, function(outcome_times, outcome_params) {
+      do.call(function_nc_spline, list(times = outcome_times, params = outcome_params, ...))
     }) %>%
       do.call(c, .)
   } else {
@@ -103,36 +136,39 @@ mean_vector <- function(ref = "4PL",
 # Jacobian functions
 # ============================================================================
 
-jacobian_slowing_single_outcome <- function(K, times, ref = "4PL", ...) {
-  # The 4PL model considered here has 2 parameters: the slope and the inflection point.
-  # (The upper and lower asymptotes are set to 1 and 0, respectively.)
-  jacobian <- matrix(0, nrow = 2 * (K + 1), ncol = 3)
+jacobian_slowing_single_outcome <- function(K, times, ref = "4PL", params, ...) {
+  jacobian_ref <- jacobian_ref_pm(times, ref = ref, params = params, ...)
+  if (is.null(dim(jacobian_ref))) {
+    jacobian_ref <- matrix(jacobian_ref, ncol = 1)
+  }
+  no_params_ref <- ncol(jacobian_ref)
+  jacobian <- matrix(0, nrow = 2 * (K + 1), ncol = no_params_ref + 1)
   
-  # Jacobian of the control group (first K+1 rows) with respect to the slope and inflection point parameters.
-  jacobian[1:(K + 1), 1:2] <- jacobian_ref_pm(times, ref = ref, ...)
-  # Jacobian of the treatment group (last K+1 rows) with respect to the slope and inflection point parameters.
-  jacobian[(K + 2):(2 * (K + 1)), 1:2] <- jacobian_ref_pm(times, ref = ref, ...)
-  # Jacobian of the treatment group (last K+1 rows) with respect to the treatment effect parameter (third column).
-  jacobian[(K + 2):(2 * (K + 1)), 3] <- ref_d(times, ref = ref, ...) * times
+  # Jacobian of the control group (first K+1 rows) with respect to reference parameters.
+  jacobian[1:(K + 1), 1:no_params_ref] <- jacobian_ref
+  # Jacobian of the treatment group (last K+1 rows) with respect to reference parameters.
+  jacobian[(K + 2):(2 * (K + 1)), 1:no_params_ref] <- jacobian_ref
+  # Jacobian of the treatment group with respect to the slowing parameter.
+  jacobian[(K + 2):(2 * (K + 1)), no_params_ref + 1] <- ref_d(times, ref = ref, params, ...) * times
   
   jacobian
 }
 
-jacobian_ref_pm <- function(times, ref = "4PL", ...) {
+jacobian_ref_pm <- function(times, ref = "4PL", params, ...) {
   if (ref == "4PL") {
-    jacobian_4PL(times, ...)
+    jacobian_4PL(times = times, params = params)
   } else if (ref == "nc_spline") {
-    jacobian_nc_spline(times, ...)
+    jacobian_nc_spline(times = times, params = params, ...)
   } else {
     stop("Unknown reference model: ", ref)
   }
 }
 
-ref_d <- function(times, ref = "4PL", ...) {
+ref_d <- function(times, ref = "4PL", params, ...) {
   if (ref == "4PL") {
-    time_d_4PL(times, ...)
+    time_d_4PL(times = times, params = params)
   } else if (ref == "nc_spline") {
-    time_d_nc_spline(times, ...)
+    time_d_nc_spline(times = times, params = params, ...)
   } else {
     stop("Unknown reference model: ", ref)
   }
@@ -156,40 +192,55 @@ jacobian_slowing_multiple_outcomes <- function(J,
   }
   # number of outcomes
   J <- length(times)
+  validate_params_list(params_list, J)
+
   # number of measurements
   no_of_measurements <- purrr::map_dbl(times, ~ length(.x)) %>%
     sum()
-  # number of parameters for the reference trajectory for each outcome
-  no_params_ref <- length(params_list)
+
+  jacobian_blocks <- purrr::map2(times, params_list, function(outcome_times, outcome_params) {
+    do.call(jacobian_slowing_single_outcome,
+              list(
+                K = length(outcome_times) - 1,
+                times = outcome_times,
+                ref = ref,
+                params = outcome_params, 
+                ...
+              ))
+  })
+  no_params_total_vec <- purrr::map_int(jacobian_blocks, ncol)
+  total_no_params <- sum(no_params_total_vec)
   
-  jacobian <- matrix(0, nrow = no_of_measurements * 2, ncol = J * (no_params_ref + 1))
+  jacobian <- matrix(0, nrow = no_of_measurements * 2, ncol = total_no_params)
   for (outcome_idx in seq_len(J)) {
     K <- length(times[[outcome_idx]]) - 1
-    if (outcome_idx == 1) {
-      start_row <- 1
-      end_row <- 2 * (K + 1)
-      start_col <- 1
-      end_col <- no_params_ref + 1
+    start_row <- if (outcome_idx == 1) {
+      1
     } else {
-      start_row <- sum(purrr::map_dbl(times[1:(outcome_idx - 1)], ~ 2 * length(.x))) + 1
-      end_row <- start_row + 2 * (K + 1) - 1
-      start_col <- (outcome_idx - 1) * (no_params_ref + 1) + 1
-      end_col <- start_col + no_params_ref
-
+      sum(purrr::map_dbl(times[1:(outcome_idx - 1)], ~ 2 * length(.x))) + 1
     }
-    jacobian[start_row:end_row, start_col:end_col] <- do.call(jacobian_slowing_single_outcome, c(list(
-      K = K,
-      times = times[[outcome_idx]],
-      ref = ref),
-      purrr::map(params_list, outcome_idx)
-    ))
+    end_row <- start_row + 2 * (K + 1) - 1
+    start_col <- if (outcome_idx == 1) {
+      1
+    } else {
+      sum(no_params_total_vec[1:(outcome_idx - 1)]) + 1
+    }
+    end_col <- start_col + no_params_total_vec[outcome_idx] - 1
+
+    jacobian_block <- jacobian_blocks[[outcome_idx]]
+
+    if (ncol(jacobian_block) != no_params_total_vec[outcome_idx]) {
+      stop("Jacobian block has unexpected number of columns for outcome ", outcome_idx, ".")
+    }
+
+    jacobian[start_row:end_row, start_col:end_col] <- jacobian_block
     
   }
-  # Remove all columns corresponding to the reference trajectory parameters
-  # (slope and inflection point) if slowing_only is TRUE. This leaves only the
+  # Remove all columns corresponding to the reference trajectory parameters if slowing_only is TRUE. This leaves only the
   # treatment effect parameters in the Jacobian.
   if (slowing_only) {
-    jacobian <- jacobian[, seq(no_params_ref + 1, J * (no_params_ref + 1), by = no_params_ref + 1), drop = FALSE]
+    slowing_cols <- cumsum(no_params_total_vec)
+    jacobian <- jacobian[, slowing_cols, drop = FALSE]
   }
   
   jacobian
@@ -201,7 +252,8 @@ jacobian_slowing_multiple_outcomes_shared <- function(J,
                                                       times,
                                                       ref = "4PL",
                                                       params_list = list(),
-                                                      slowing_only = FALSE) {
+                                                      slowing_only = FALSE,
+                                                      ...) {
   if (!is.list(times) & !is.numeric(times)) {
     stop("times must be a numeric vector or a list of numeric vectors.")
   }
@@ -210,40 +262,57 @@ jacobian_slowing_multiple_outcomes_shared <- function(J,
   }
   # number of outcomes
   J <- length(times)
-  # number of measurements
-  no_of_measurements <- purrr::map_dbl(times, ~ length(.x)) %>%
-    sum()
-  # number of parameters for the reference trajectory for each outcome
-  no_params_ref <- length(params_list)
+  validate_params_list(params_list, J)
   
-  jacobian_outcome_specific <- jacobian_slowing_multiple_outcomes(J, times = times, ref = ref, params_list = params_list)
+  jacobian_outcome_specific <- jacobian_slowing_multiple_outcomes(
+    J = J,
+    K = K,
+    times = times,
+    ref = ref,
+    params_list = params_list,
+    slowing_only = FALSE,
+    ...
+  )
+
+  jacobian_blocks <- purrr::map2(times, params_list, function(outcome_times, outcome_params) {
+    do.call(jacobian_slowing_single_outcome, list(
+      K = length(outcome_times) - 1,
+      times = outcome_times,
+      ref = ref,
+      params = outcome_params, 
+      ...
+    ))
+  })
+  no_params_total_vec <- purrr::map_int(jacobian_blocks, ncol)
+  no_params_ref_vec <- no_params_total_vec - 1
+  total_no_params <- sum(no_params_total_vec)
+  total_no_params_ref <- sum(no_params_ref_vec)
   
   jacobian_gamma_theta <- matrix(0,
-                                 nrow = J * (no_params_ref + 1),
-                                 ncol = J * no_params_ref + 1)
+                                 nrow = total_no_params,
+                                 ncol = total_no_params_ref + 1)
   
+  row_offset <- 0
+  col_offset <- 0
   for (outcome_idx in seq_len(J)) {
-    if (outcome_idx == 1) {
-      start_row <- 1
-      end_row <- no_params_ref + 1
-      start_col <- 2
-      end_col <- no_params_ref + 2
-    } else {
-      start_row <- (outcome_idx - 1) * (no_params_ref + 1) + 1
-      end_row <- start_row + no_params_ref
-      start_col <- (outcome_idx - 1) * no_params_ref + 2
-      end_col <- start_col + no_params_ref
+    no_params_ref <- no_params_ref_vec[outcome_idx]
+    no_params_total <- no_params_total_vec[outcome_idx]
+
+    ref_row_idx <- (row_offset + 1):(row_offset + no_params_ref)
+    shared_row_idx <- row_offset + no_params_total
+
+    if (no_params_ref > 0) {
+      ref_col_idx <- (col_offset + 2):(col_offset + no_params_ref + 1)
+      jacobian_gamma_theta[ref_row_idx, ref_col_idx] <- diag(1, no_params_ref)
     }
-    
-    jacobian_gamma_theta[start_row:(start_row + 1), start_col:(start_col + 1)] <- diag(c(1, 1))
+    jacobian_gamma_theta[shared_row_idx, 1] <- 1
+
+    row_offset <- row_offset + no_params_total
+    col_offset <- col_offset + no_params_ref
   }
-  # The first column corresponds to the treatment effect parameter, which is
-  # shared across all outcomes. Therefore, we set the corresponding entry in the
-  # Jacobian to 1 for each outcome.
-  jacobian_gamma_theta[seq(no_params_ref + 1, J * (no_params_ref + 1), by = no_params_ref + 1), 1] <- 1
   
   jacobian_shared <- jacobian_outcome_specific %*% jacobian_gamma_theta
-  # Only retain the columns corresponding to the shared treatment effect parameter (third column of the Jacobian for each outcome).
+  # Only retain the shared treatment effect parameter if slowing_only is TRUE.
   if (slowing_only) {
     jacobian_shared <- jacobian_shared[, 1, drop = FALSE]
   }
@@ -409,18 +478,27 @@ build_linear_contrast_common <- function(times, Sigma) {
 
 
 # Derivative of the 4PL curve with respect to time, given the slope and inflection point parameters.
-time_d_4PL <- function(times, slope, inflection, ...) {
+time_d_4PL <- function(times, params) {
+  inflection <- params[1]
+  slope <- params[2]
+  
   exp_term <- exp(-slope * (times - inflection))
   denom <- (1 + exp_term)^2
   - slope * exp_term / denom
 }
 
-function_4PL <- function(times, slope, inflection, ...) {
+function_4PL <- function(times, params) {
+  inflection <- params[1]
+  slope <- params[2]
+  
   # Compute the 4PL model values given times, slope, and inflection point.
   1 / (1 + exp(-slope * (times - inflection)))
 }
 
-jacobian_4PL <- function(times, slope, inflection, ...) {
+jacobian_4PL <- function(times, params) {
+  inflection <- params[1]
+  slope <- params[2]
+  
   # Compute the Jacobian of the 4PL model with respect to the slope and inflection point parameters.
   exp_term <- exp(-slope * (times - inflection))
   denom <- (1 + exp_term)^2
@@ -433,7 +511,7 @@ jacobian_4PL <- function(times, slope, inflection, ...) {
 # Natural Cubic Spline Interpolation Reference Trajectory Functions
 # ============================================================================
 
-build_nc_spline_basis <- function(times, knots, coeffs = NULL, ...) {
+build_nc_spline_basis <- function(times, knots, boundary_knots, params = NULL, ...) {
   if (!is.numeric(times)) {
     stop("times must be a numeric vector.")
   }
@@ -441,44 +519,20 @@ build_nc_spline_basis <- function(times, knots, coeffs = NULL, ...) {
     stop("times must not be empty.")
   }
 
-  # `knots` can be either a numeric vector of internal knots or a list
-  # containing additional spline settings.
-  if (is.list(knots)) {
-    internal_knots <- knots$internal
-    if (is.null(internal_knots)) {
-      internal_knots <- knots$knots
-    }
-    boundary_knots <- knots$boundary
-    if (is.null(boundary_knots)) {
-      boundary_knots <- knots$Boundary.knots
-    }
-  } else if (is.numeric(knots) || is.null(knots)) {
-    internal_knots <- knots
-    boundary_knots <- range(times)
-  } else {
-    stop("knots must be a numeric vector, NULL, or a list.")
-  }
-
-  if (!is.null(internal_knots) && length(internal_knots) > 0 && !is.numeric(internal_knots)) {
-    stop("internal knots must be numeric.")
-  }
-  if (is.null(boundary_knots)) {
-    boundary_knots <- range(times)
-  }
   if (!is.numeric(boundary_knots) || length(boundary_knots) != 2) {
     stop("boundary knots must be a numeric vector of length 2.")
   }
 
   basis <- splines::ns(
     x = times,
-    knots = internal_knots,
+    knots = knots,
     Boundary.knots = boundary_knots,
     intercept = TRUE
   )
 
-  if (!is.null(coeffs) && length(coeffs) != ncol(basis)) {
+  if (!is.null(params) && length(params) != ncol(basis)) {
     stop(
-      "Length of coeffs (", length(coeffs),
+      "Length of params (", length(params),
       ") does not match spline basis dimension (", ncol(basis), ")."
     )
   }
@@ -486,9 +540,9 @@ build_nc_spline_basis <- function(times, knots, coeffs = NULL, ...) {
   basis
 }
 
-time_d_nc_spline <- function(times, knots, coeffs, ...) {
-  if (!is.numeric(coeffs)) {
-    stop("coeffs must be a numeric vector.")
+time_d_nc_spline <- function(times, knots, boundary_knots, params) {
+  if (!is.numeric(params)) {
+    stop("params must be a numeric vector.")
   }
   if (!is.numeric(times)) {
     stop("times must be a numeric vector.")
@@ -496,26 +550,36 @@ time_d_nc_spline <- function(times, knots, coeffs, ...) {
 
   # Central finite difference for d/dt f(t), with adaptive step size.
   eps <- sqrt(.Machine$double.eps) * pmax(1, abs(times))
-  f_plus <- function_nc_spline(times + eps, knots = knots, coeffs = coeffs, ...)
-  f_minus <- function_nc_spline(times - eps, knots = knots, coeffs = coeffs, ...)
+  f_plus <- function_nc_spline(times + eps, knots = knots, boundary_knots = boundary_knots, params = params)
+  f_minus <- function_nc_spline(times - eps, knots = knots, boundary_knots = boundary_knots, params = params)
 
   as.numeric((f_plus - f_minus) / (2 * eps))
 }
 
-function_nc_spline <- function(times, knots, coeffs, ...) {
-  if (!is.numeric(coeffs)) {
-    stop("coeffs must be a numeric vector.")
+function_nc_spline <- function(times, params, knots, boundary_knots) {
+  if (!is.numeric(params)) {
+    stop("params must be a numeric vector.")
   }
-  basis <- build_nc_spline_basis(times = times, knots = knots, coeffs = coeffs, ...)
-  as.numeric(basis %*% coeffs)
+  basis <- build_nc_spline_basis(
+    times = times,
+    knots = knots,
+    boundary_knots = boundary_knots,
+    params = params
+  )
+  as.numeric(basis %*% params)
 }
 
-jacobian_nc_spline <- function(times, knots, coeffs, ...) {
-  if (!is.numeric(coeffs)) {
-    stop("coeffs must be a numeric vector.")
+jacobian_nc_spline <- function(times, knots, boundary_knots, params) {
+  if (!is.numeric(params)) {
+    stop("params must be a numeric vector.")
   }
   # The model is linear in coefficients, so the Jacobian is the spline basis.
-  build_nc_spline_basis(times = times, knots = knots, coeffs = coeffs, ...)
+  build_nc_spline_basis(
+    times = times,
+    knots = knots,
+    boundary_knots = boundary_knots,
+    params = params
+  )
 }
 
 # ============================================================================
