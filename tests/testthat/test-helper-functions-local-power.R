@@ -25,6 +25,21 @@ testthat::test_that("4PL reference helpers return expected shapes and ranges", {
   testthat::expect_equal(d_time, jac[, 1], tolerance = 1e-12)
 })
 
+testthat::test_that("nc spline reference helpers return expected shapes and ranges", {
+  times <- 0:8
+  coeffs <- 1:5
+
+  t <- build_nc_spline_basis(times = times, knots = 1:3, coeffs = coeffs)
+  curve <- function_nc_spline(times, knots = 1:3, coeffs = coeffs)
+  jac <- jacobian_nc_spline(times, knots = 1:3, coeffs = coeffs)
+  d_time <- time_d_nc_spline(times, knots = 1:3, coeffs = coeffs)
+
+  testthat::expect_length(curve, length(times))
+  testthat::expect_equal(dim(jac), c(length(times), length(coeffs)))
+})
+
+
+
 
 testthat::test_that("omnibus and summing contrast matrices have expected dimensions and entries", {
   k <- 3
@@ -257,6 +272,12 @@ testthat::test_that("local_shift_vector_slowing_outcome() and mean_vector() retu
 
   testthat::expect_equal(result1, expected1, tolerance = 1e-10)
   testthat::expect_equal(as.numeric(result2), expected2, tolerance = 1e-10)
+
+  ref <- "nc_spline"
+  params_list = list(knots = list(c(1, 2), c(1, 2), c(1, 2)), coeffs = list(c(0.5, 1.0, 1.5, 2), c(0.5, 1.0, 1.5, 2), c(0.5, 1.0, 1.5, 2)))
+
+  result3 <- mean_vector(ref = ref, J = j, K = k, times = rep(times, 2), params_list = params_list)
+  # result4 <- local_shift_vector_slowing_outcome(ref = ref, J = j, K = k, times = times, h = c(1, 2, 3), params_list = params_list)
 })
 
 

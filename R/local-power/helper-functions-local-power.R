@@ -87,8 +87,11 @@ mean_vector <- function(ref = "4PL",
       function_4PL(times, slope = slope, inflection = inflection)
     }) %>%
       do.call(c, .)
-  } else if (ref == "spline") {
-    # jacobian_local <- jacobian_slowing_multiple_outcomes(j, k, times, ref = ref, ...)
+  } else if (ref == "nc_spline") {
+    mean_vector_dbl <- purrr::map2(params_list$knots, params_list$coeffs, function(knots, coeffs) {
+      function_nc_spline(times, knots = knots, coeffs = coeffs)
+    }) %>%
+      do.call(c, .)
   } else {
     stop("Unknown reference model: ", ref)
   }
@@ -118,9 +121,8 @@ jacobian_slowing_single_outcome <- function(K, times, ref = "4PL", ...) {
 jacobian_ref_pm <- function(times, ref = "4PL", ...) {
   if (ref == "4PL") {
     jacobian_4PL(times, ...)
-  } else if (ref == "spline") {
-    # For the spline reference model, we can use the same Jacobian as the 4PL model for simplicity.
-    # jacobian_4PL(times, ...)
+  } else if (ref == "nc_spline") {
+    jacobian_nc_spline(times, ...)
   } else {
     stop("Unknown reference model: ", ref)
   }
@@ -129,9 +131,8 @@ jacobian_ref_pm <- function(times, ref = "4PL", ...) {
 ref_d <- function(times, ref = "4PL", ...) {
   if (ref == "4PL") {
     time_d_4PL(times, ...)
-  } else if (ref == "spline") {
-    # For the spline reference model, we can use the same derivative as the 4PL model for simplicity.
-    # time_d_4PL(times, ...)
+  } else if (ref == "nc_spline") {
+    time_d_nc_spline(times, ...)
   } else {
     stop("Unknown reference model: ", ref)
   }
@@ -144,7 +145,9 @@ jacobian_slowing_multiple_outcomes <- function(J,
                                                times,
                                                ref = "4PL",
                                                params_list = list(),
-                                               slowing_only = FALSE) {
+                                               slowing_only = FALSE,
+                                               ...
+                                               ) {
   if (!is.list(times) & !is.numeric(times)) {
     stop("times must be a numeric vector or a list of numeric vectors.")
   }
@@ -424,6 +427,95 @@ jacobian_4PL <- function(times, slope, inflection, ...) {
   d_inflection <- -slope * exp_term / denom
   d_slope <- (times - inflection) * exp_term / denom
   cbind(d_inflection, d_slope)
+}
+
+# ============================================================================
+# Natural Cubic Spline Interpolation Reference Trajectory Functions
+# ============================================================================
+
+build_nc_spline_basis <- function(times, knots, coeffs = NULL, ...) {
+  if (!is.numeric(times)) {
+    stop("times must be a numeric vector.")
+  }
+  if (length(times) == 0) {
+    stop("times must not be empty.")
+  }
+
+  # `knots` can be either a numeric vector of internal knots or a list
+  # containing additional spline settings.
+  if (is.list(knots)) {
+    internal_knots <- knots$internal
+    if (is.null(internal_knots)) {
+      internal_knots <- knots$knots
+    }
+    boundary_knots <- knots$boundary
+    if (is.null(boundary_knots)) {
+      boundary_knots <- knots$Boundary.knots
+    }
+  } else if (is.numeric(knots) || is.null(knots)) {
+    internal_knots <- knots
+    boundary_knots <- range(times)
+  } else {
+    stop("knots must be a numeric vector, NULL, or a list.")
+  }
+
+  if (!is.null(internal_knots) && length(internal_knots) > 0 && !is.numeric(internal_knots)) {
+    stop("internal knots must be numeric.")
+  }
+  if (is.null(boundary_knots)) {
+    boundary_knots <- range(times)
+  }
+  if (!is.numeric(boundary_knots) || length(boundary_knots) != 2) {
+    stop("boundary knots must be a numeric vector of length 2.")
+  }
+
+  basis <- splines::ns(
+    x = times,
+    knots = internal_knots,
+    Boundary.knots = boundary_knots,
+    intercept = TRUE
+  )
+
+  if (!is.null(coeffs) && length(coeffs) != ncol(basis)) {
+    stop(
+      "Length of coeffs (", length(coeffs),
+      ") does not match spline basis dimension (", ncol(basis), ")."
+    )
+  }
+
+  basis
+}
+
+time_d_nc_spline <- function(times, knots, coeffs, ...) {
+  if (!is.numeric(coeffs)) {
+    stop("coeffs must be a numeric vector.")
+  }
+  if (!is.numeric(times)) {
+    stop("times must be a numeric vector.")
+  }
+
+  # Central finite difference for d/dt f(t), with adaptive step size.
+  eps <- sqrt(.Machine$double.eps) * pmax(1, abs(times))
+  f_plus <- function_nc_spline(times + eps, knots = knots, coeffs = coeffs, ...)
+  f_minus <- function_nc_spline(times - eps, knots = knots, coeffs = coeffs, ...)
+
+  as.numeric((f_plus - f_minus) / (2 * eps))
+}
+
+function_nc_spline <- function(times, knots, coeffs, ...) {
+  if (!is.numeric(coeffs)) {
+    stop("coeffs must be a numeric vector.")
+  }
+  basis <- build_nc_spline_basis(times = times, knots = knots, coeffs = coeffs, ...)
+  as.numeric(basis %*% coeffs)
+}
+
+jacobian_nc_spline <- function(times, knots, coeffs, ...) {
+  if (!is.numeric(coeffs)) {
+    stop("coeffs must be a numeric vector.")
+  }
+  # The model is linear in coefficients, so the Jacobian is the spline basis.
+  build_nc_spline_basis(times = times, knots = knots, coeffs = coeffs, ...)
 }
 
 # ============================================================================
