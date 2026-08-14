@@ -140,25 +140,3 @@ jac_mu_from_gamma_null_f_factory <- function(slowing_models) {
     Matrix::bdiag(jac_blocks)
   }
 }
-
-
-mu = mu_from_gamma_null_f_factory(make_slowing_models(
-  times = list(c(0, 1, 2, 3, 4), c(0, 1, 2, 3, 4)),
-  ref = "4PL",
-  type = "proportional"
-))
-
-mu(c(0.5, 1, 1, 5))
-
-
-
-t = make_slowing_models(times = list(c(0, 1, 2, 3, 4), c(0, 1, 2, 3, 4)),
-                        ref = "nc_spline",
-                        type = "proportional")
-
-t = make_slowing_model(times = c(0, 1, 2, 3, 4), ref = "nc_spline", type = "proportional")
-
-
-t$reference_trajectory_functions_list$eval(c(0, 1, 2, 3, 4), c(0.5, 1, 1, 5, 4))
-t$mu_from_gamma(c(0.5, 1, 1, 5, 4))
-
