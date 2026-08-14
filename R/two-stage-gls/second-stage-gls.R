@@ -75,7 +75,7 @@ fit_gls <- function(m_tilde, Sigma, mean_fn, jac_mean_fn, start, method = "BFGS"
   )
   
   # Raise a warning if the optimization did not converge.
-  if()opt$convergence != 0) {
+  if (opt$convergence != 0) {
     warning("GLS optimization did not converge. Convergence code: ", opt$convergence)
   }
   
