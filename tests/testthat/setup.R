@@ -6,3 +6,9 @@ if (!file.exists(helper_file)) {
 }
 
 source(helper_file)
+
+gls_file <- file.path("R", "local-power", "second-stage-gls.R")
+if (!file.exists(gls_file)) {
+  gls_file <- file.path("..", "..", "R", "local-power", "second-stage-gls.R")
+}
+source(gls_file)

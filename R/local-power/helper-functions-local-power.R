@@ -624,6 +624,58 @@ check_identical <- function(lst) {
 }
 
 
+reference_trajectory_f_list <- function(times, ref) {
+  if (ref == "4PL") {
+    no_params = 2
+    list(
+      eval = function(times, params) {
+        check_no_params(params, no_params)
+        function_4PL(times, params)
+      }
+        ,
+      jacobian = function(times, params) {
+        check_no_params(params, no_params)
+        jacobian_4PL(times, params)
+      },
+      time_derivative = function(times, params) {
+        check_no_params(params, no_params)
+        time_d_4PL(times, params)
+      },
+      no_params = no_params
+      
+    )
+  } else if (ref == "nc_spline") {
+    knots = times[c(-1, -length(times))]
+    boundary_knots = range(times)
+    
+    no_params = length(knots) + 2
+    
+    list(
+      eval = function(times, params) {
+        check_no_params(params, no_params)
+        function_nc_spline(times = times, params = params, knots = knots, boundary_knots = boundary_knots)
+      },
+      jacobian = function(times, params) {
+        check_no_params(params, no_params)
+        jacobian_nc_spline(times = times, params = params, knots = knots, boundary_knots = boundary_knots)
+      },
+      time_derivative = function(times, params) {
+        check_no_params(params, no_params)
+        time_d_nc_spline(times = times, params = params, knots = knots, boundary_knots = boundary_knots)
+      },
+      no_params = no_params
+    )
+  }
+}
+
+check_no_params <- function(params, no_params) {
+  if (length(params) != no_params) {
+    stop("Length of params (", length(params), ") does not match expected number of parameters (", no_params, ").")
+  }
+}
+
+
+
 
 
 
