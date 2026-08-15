@@ -1,26 +1,29 @@
-# Second-stage GLS: fit working-model parameters to first-stage estimates,
-# build the plug-in contrast matrix B_n, and run the targeted test.
+# Second-stage GLS: fit working-model parameters to first-stage estimates, build
+# the plug-in contrast matrix B_n, and run the targeted test.
 #
 # All functions operate on the stacked mean vector / covariance convention
-# established in helper-functions-local-power.R.  The stacked mean vector
-# m_tilde is ordered as:
-#   (ctrl_j1, trt_j1, ctrl_j2, trt_j2, ..., ctrl_jJ, trt_jJ)
-# where each block has K+1 entries (baseline + K follow-up visits).
-
-
-# ============================================================================
-# GLS objective
-# ============================================================================
-
-# Q(gamma0; m_tilde, Sigma_inv) for the null-constrained optimisation.
-# gamma0_vec  : concatenation of reference-trajectory parameters for all J
-#               outcomes (nuisance parameters; treatment-effect parameters are
-#               held at their null values).
-# mean_fn     : function(gamma0_vec) -> stacked mean vector mu(gamma0, gamma1_null)
-# m_tilde     : first-stage stacked mean estimate
-# Sigma_inv   : pre-computed solve(Sigma_n)
-gls_criterion <- function(gamma0_vec, mean_fn, m_tilde, Sigma_inv) {
-  diff <- m_tilde - mean_fn(gamma0_vec)
+# Evaluate the GLS criterion function 
+#' 
+#' `gls_criterion()` evaluates the GLS criterion function 
+#' Q(gamma) = (m_tilde - mu(gamma))' Sigma^{-1} (m_tilde - mu(gamma)).
+#' 
+#' The model is specified by the mean function `mean_fn`, which takes a vector
+#' of parameters `gamma` and returns the stacked mean vector. The first-stage 
+#' estimates are given by `m_tilde` and `Sigma_inv` is the inverse of the 
+#' first-stage covariance matrix.
+#' 
+#' @param gamma (numeric) Vector of parameters for the mean function.
+#' @param mean_fn (function) that takes a vector of parameters (`gamma`) and 
+#' returns the stacked mean vector.
+#' @param m_tilde (numeric) Stacked mean vector from the first-stage estimates.
+#' @param Sigma_inv (matrix) Inverse of the first-stage covariance matrix.
+#'
+#' @returns (numeric) The value of the GLS criterion function evaluated at `gamma`.
+#' @export
+#'
+#' @examples
+gls_criterion <- function(gamma, mean_fn, m_tilde, Sigma_inv) {
+  diff <- m_tilde - mean_fn(gamma)
   as.numeric(crossprod(diff, Sigma_inv %*% diff))
 }
 
