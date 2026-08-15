@@ -7,3 +7,4 @@
 * Fit slowing_models under the null outcome by outcome. This would allow for Sigma
 to be not invertible, the contrast-based test may still work with A Sigma A being 
 invertible.
+

@@ -1,8 +1,8 @@
-if (!file.exists(helper_file2)) {
-  helper_file2 <- file.path("R", "two-stage-gls", "second-stage-gls.R")
-  helper_file3 <- file.path("R", "local-power", "helper-functions-local-power.R")
-  helper_file4 <- file.path("R", "two-stage-gls", "models.R")
-}
+helper_file2 <- file.path("..", "..", "R", "two-stage-gls", "second-stage-gls.R")
+helper_file3 <- file.path("..", "..","R", "local-power", "helper-functions-local-power.R")
+helper_file4 <- file.path("..", "..","R", "two-stage-gls", "models.R")
+
+
 source(helper_file2)
 source(helper_file3)
 source(helper_file4)
@@ -29,7 +29,7 @@ testthat::test_that("two_stage_gls_null() works for 4PL and NC spline", {
   gls_fitted_4PL <- two_stage_gls_null(
     m_tilde = m_tilde,
     Sigma   = Sigma,
-    slowing_models = prop_slow_models,
+    slowing_models = prop_slow_models_4PL,
     start = rep(1:2, J)
   )
   
