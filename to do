@@ -1,10 +1,13 @@
 * Implement contrast functions for quadratic slowing (in helper-functions-local-power)
 
-* document and clean up functions in targeted-test and two-stage-gls
-
 * Implement more unit tests
 
 * Fit slowing_models under the null outcome by outcome. This would allow for Sigma
 to be not invertible, the contrast-based test may still work with A Sigma A being 
-invertible.
+invertible. I could implement this by allowing for user-specified blocks in which 
+GLS is performed separately.
+
+* Implement general working model? This only requires mean_fn, jacobian_fn, and 
+a specification of the rows in jacobian_fn that correspond to treatment effects
+plus their null values. 
 
