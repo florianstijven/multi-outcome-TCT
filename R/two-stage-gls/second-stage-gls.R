@@ -19,44 +19,35 @@
 #' @param Sigma_inv (matrix) Inverse of the first-stage covariance matrix.
 #'
 #' @returns (numeric) The value of the GLS criterion function evaluated at `gamma`.
-#' @export
-#'
-#' @examples
 gls_criterion <- function(gamma, mean_fn, m_tilde, Sigma_inv) {
   diff <- m_tilde - mean_fn(gamma)
   as.numeric(crossprod(diff, Sigma_inv %*% diff))
 }
 
-# Evaluate the reference trajectory at given times.
-ref_eval <- function(times, ref, params, ...) {
-  if (ref == "4PL") {
-    function_4PL(times, params)
-  } else if (ref == "nc_spline") {
-    do.call(function_nc_spline, c(list(times = times, params = params), list(...)))
-  } else {
-    stop("Unknown reference model: ", ref)
-  }
-}
-
-
-# ============================================================================
-# Null-constrained GLS estimator
-# ============================================================================
-
-# Minimise Q over reference-trajectory parameters gamma0 while holding
-# gamma1 = gamma1_null.
-#
-# Returns a list with:
-#   $gamma0_hat  : estimated reference-trajectory parameters (vector)
-#   $criterion   : value of Q at the optimum
-#   $optim       : raw optim() output
-#
-# m_tilde     : first-stage stacked mean estimate
-# Sigma       : first-stage covariance estimate
-# mean_fn     : null mean function from make_null_mean_fn_*
-# start       : starting values for gamma0
-# method      : optimisation method passed to optim(); default "BFGS"
-
+#' Fit a GLS model to first-stage estimates
+#'
+#' `fit_gls()` fits a generalized least squares (GLS) model to the first-stage
+#' estimates `m_tilde` and `Sigma`. The model is specified by the mean function
+#' `mean_fn` and its Jacobian `jac_mean_fn`. The optimization is performed using
+#' the `optim()` function, starting from the initial parameter values provided
+#' in `start`. The optimization method can be specified using the `method`
+#' argument.
+#'
+#' @param m_tilde (numeric) Stacked mean vector from the first-stage estimates.
+#' @param Sigma (matrix) Covariance matrix from the first-stage estimates.
+#' @param mean_fn (function) that takes a vector of parameters (`gamma`) and
+#'   returns the stacked mean vector. This argument defines the model.
+#' @param jac_mean_fn (function) that takes a vector of parameters (`gamma`) and
+#'   returns the Jacobian of the mean function. This is used to compute the
+#'   gradient of the GLS criterion function.
+#' @param start (numeric) Starting values for the parameters to be estimated.
+#' @param method (character) Optimization method to be used in `optim()`.
+#'   Default is `"BFGS"`.
+#'
+#' @returns (list) A list containing:
+#'  - `gamma_hat`: Estimated parameters (vector).
+#'  - `criterion`: Value of the GLS criterion function at the optimum.
+#'  - `optim`: Raw output from the `optim()` function.
 fit_gls <- function(m_tilde, Sigma, mean_fn, jac_mean_fn, start, method = "BFGS") {
   Sigma_inv <- solve(Sigma)
   gls_gradient <- function(gamma0_vec, ...) {
@@ -89,8 +80,16 @@ fit_gls <- function(m_tilde, Sigma, mean_fn, jac_mean_fn, start, method = "BFGS"
   )
 }
 
-# Function to process the results from the GLS fit. Mainly to annotate the
-# estimates.
+#' Process GLS fit estimates and assign names based on the model structure
+#'
+#' @param gamma_hat (numeric) Vector of estimated parameters from the GLS fit.
+#' @param null_model (boolean) Indicates whether the model is a null model
+#'   (TRUE) where the treatment effect is zero or a full model (FALSE).
+#' @param slowing_models (list) A list of slowing model specifications for each
+#'   outcome, as returned by `build_slowing_models()`.
+#'
+#' @returns (named numeric) A named vector of estimated parameters, where the
+#'   names are constructed based on the model structure and outcome indices.
 fit_gls_est_names <- function(gamma_hat, null_model, slowing_models) {
   # Names vector for gamma_hat
   names_vec <- c()
@@ -130,10 +129,20 @@ fit_gls_est_names <- function(gamma_hat, null_model, slowing_models) {
   return(setNames(gamma_hat, names_vec))
 }
 
-# Split the estimated parameters into two lists of estimated parameters. The
-# first list is a list where each element are the estimated reference-trajectory
-# parameters for each outcome. The second list is a list where each element are
-# the estimated slowing parameters for each outcome.
+
+#' Split Estimated Slowing Parameters
+#'
+#' This function takes a vector of estimated parameters (`gamma_hat`) from a GLS
+#' fit and splits it into two lists: one for the estimated reference-trajectory
+#' parameters (`gamma0_hat`) and another for the estimated slowing parameters
+#' (`gamma1_hat`). The splitting is based on the structure of the provided
+#' `slowing_models` and whether the model is a null model or not.
+#'
+#' @inheritParams fit_gls_est_names
+#'
+#' @returns (list) A list containing two elements:
+#' - `gamma0_hat`: A list of estimated reference-trajectory parameters for each outcome.
+#' - `gamma1_hat`: A list of estimated slowing parameters for each outcome.
 fit_gls_split_gamma_hat <- function(gamma_hat, null_model, slowing_models) {
   J <- length(slowing_models)
   
@@ -166,6 +175,23 @@ fit_gls_split_gamma_hat <- function(gamma_hat, null_model, slowing_models) {
 
 
 
+#' Fit a slowing model using GLS
+#'
+#' [two_stage_gls_full()] fits a generalized least squares (GLS) model to the
+#' first-stage estimates. [two_stage_gls_null()] fits the same model under the
+#' null of no treatment effect. It constructs the mean function based on
+#' the provided slowing models, and then optimizes the GLS criterion function to
+#' estimate the reference-trajectory parameters (and slowing parameters for [two_stage_gls_full()]).
+#'
+#' @inheritParams fit_gls
+#' @inheritParams fit_gls_split_gamma_hat
+#'
+#' @returns (list) A list containing:
+#' - `gamma_hat`: Named vector of estimated parameters under the null.
+#' - `gamma_hat_list`: List of estimated parameters split into reference-trajectory and slowing
+#'   parameters for each outcome.
+#'  - `criterion`: Value of the GLS criterion function at the optimum.
+#'  - `optim`: Raw output from the `optim()` function.
 two_stage_gls_null <- function(m_tilde, Sigma, slowing_models, start) {
   # Build the null mean function
   mean_fn_null <- mu_from_gamma_null_f_factory(slowing_models)
@@ -206,6 +232,8 @@ two_stage_gls_null <- function(m_tilde, Sigma, slowing_models, start) {
   )
 }
 
+
+#' @rdname two_stage_gls_null 
 two_stage_gls_full <- function(m_tilde, Sigma, slowing_models) {
   # Build the full mean function
   mean_fn_full <- mu_from_gamma_f_factory(slowing_models)

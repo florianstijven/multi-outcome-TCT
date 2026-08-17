@@ -20,6 +20,22 @@
 # working_model : List (to be specified)
 # ...         : extra args forwarded to spline helpers
 
+#' Data-Adaptive Targeted Test Based on Slowing Model
+#'
+#' [targeted_test_proportional_slowing()] estimates the slowing model parameters
+#' under the null hypothesis and computes a targeted test statistic for the
+#' omnibus null hypothesis of no treatment effect across multiple outcomes.
+#'
+#' @inheritParams two_stage_gls_null
+#' @param shared (boolean) If TRUE, the slowing model parameters are shared
+#'   across outcomes; if FALSE, they are outcome-specific.
+#'
+#' @returns (list) A list containing the following elements:
+#'  - `B_n`: The plug-in contrast matrix.
+#'  - `gls_fitted_null`: The fitted model under the null hypothesis.
+#'  - `statistic`: The computed test statistic.
+#'  - `df`: The degrees of freedom for the test statistic.
+#'  - `p_value`: The p-value associated with the test statistic.
 targeted_test_proportional_slowing <- function(m_tilde, Sigma, shared, slowing_models, start) {
   # Step 1: Fit working model under the null.
   gls_fitted_null <- two_stage_gls_null(m_tilde = m_tilde,
@@ -59,35 +75,14 @@ targeted_test_proportional_slowing <- function(m_tilde, Sigma, shared, slowing_m
 }
 
 
-# ============================================================================
-# Plug-in contrast matrix B_n
-# ============================================================================
-
-# Compute B_n = dot_mu(gamma_hat)^T A^T (A Sigma A^T)^{-1} A
-# using only the treatment-effect columns of the Jacobian (Remark in manuscript:
-# reference-trajectory columns are orthogonal to A and can be dropped).
-#
-# jacobian    : full Jacobian matrix from build_jacobian_at_null()
-# A           : omnibus contrast matrix
-# Sigma       : first-stage covariance estimate
-# shared      : if TRUE, the last column of the Jacobian is the shared slowing
-#               parameter; if FALSE, the last J columns are outcome-specific
-# J           : number of outcomes (only needed when shared = FALSE)
-
-build_Bn <- function(jacobian, A, Sigma, shared = TRUE, J = NULL) {
-  # Extract only the treatment-effect columns: last 1 (shared) or last J
-  # (outcome-specific) columns. These are the D_time columns from Remark
-  # in the manuscript; reference-trajectory columns satisfy A D_1 = 0.
-  if (shared) {
-    jac_time <- jacobian[, ncol(jacobian), drop = FALSE]
-  } else {
-    if (is.null(J)) stop("J must be supplied when shared = FALSE.")
-    jac_time <- jacobian[, (ncol(jacobian) - J + 1):ncol(jacobian), drop = FALSE]
-  }
-  
-  build_contrast_matrix(jacobian = jac_time, A = A, Sigma = Sigma)
-}
-
+#' Build Jacobian of Slowing Model
+#'
+#' @param gamma0 (list) A list of reference-trajectory parameters under the null
+#'   hypothesis. Each element of the list corresponds to an outcome.
+#' @inheritParams two_stage_gls_null
+#'
+#' @returns (matrix) The Jacobian matrix of the slowing model evaluated at the
+#'   null estimate.
 build_jacobian_at_null <- function(gamma0, slowing_models, shared) {
   if (slowing_models[[1]]$type != "proportional") {
     stop("Only proportional slowing is currently supported for the targeted test.")
@@ -119,22 +114,20 @@ build_jacobian_at_null <- function(gamma0, slowing_models, shared) {
 }
 
 
-# ============================================================================
-# Targeted test statistic
-# ============================================================================
 
-# Compute T_hat_n = n * m_tilde^T B_n^T (B_n Sigma B_n^T)^{-1} B_n m_tilde
-# and return the chi-squared p-value with df = nrow(B_n).
-#
-# B_n     : contrast matrix from build_Bn()
-# m_tilde : first-stage stacked mean estimate
-# Sigma   : first-stage covariance estimate
-# n       : total sample size (used to scale the statistic)
-
-targeted_test_statistic <- function(B_n, m_tilde, Sigma) {
-  BSB_inv <- solve(B_n %*% Sigma %*% t(B_n))
-  T_hat <- as.numeric(t(m_tilde) %*% t(B_n) %*% BSB_inv %*% B_n %*% m_tilde)
-  df <- nrow(B_n)
+#' Compute Chi-Squared Test Statistic
+#'
+#' @param B (matrix) The contrast matrix.
+#' @inheritParams two_stage_gls_null
+#' 
+#' @returns (list) A list containing the following elements:
+#' - `statistic`: The computed test statistic.
+#' - `df`: The degrees of freedom for the test statistic.
+#' - `p_value`: The p-value associated with the test statistic.
+targeted_test_statistic <- function(B, m_tilde, Sigma) {
+  BSB_inv <- solve(B %*% Sigma %*% t(B))
+  T_hat <- as.numeric(t(m_tilde) %*% t(B) %*% BSB_inv %*% B %*% m_tilde)
+  df <- nrow(B)
   p_value <- stats::pchisq(T_hat, df = df, lower.tail = FALSE)
   list(statistic = T_hat, df = df, p_value = p_value)
 }
