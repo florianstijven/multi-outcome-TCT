@@ -1,11 +1,13 @@
 helper_file2 <- file.path("..", "..", "R", "two-stage-gls", "second-stage-gls.R")
 helper_file3 <- file.path("..", "..","R", "local-power", "helper-functions-local-power.R")
 helper_file4 <- file.path("..", "..","R", "two-stage-gls", "models.R")
+helper_file5 <- file.path("..", "..","R", "two-stage-gls", "slowing-models.R")
 
 
 source(helper_file2)
 source(helper_file3)
 source(helper_file4)
+source(helper_file5)
 # ============================================================================
 # Shared fixtures used across multiple tests
 # ============================================================================
@@ -29,14 +31,14 @@ testthat::test_that("two_stage_gls_null() works for 4PL and NC spline", {
   gls_fitted_4PL <- two_stage_gls_null(
     m_tilde = m_tilde,
     Sigma   = Sigma,
-    slowing_models = prop_slow_models_4PL,
+    working_model = prop_slow_models_4PL,
     start = rep(1:2, J)
   )
   
   gls_fitted_NC <- two_stage_gls_null(
     m_tilde = m_tilde,
     Sigma   = Sigma,
-    slowing_models = prop_slow_models_NC,
+    working_model = prop_slow_models_NC,
     start = rep(0:K, J)
   )
   
@@ -49,7 +51,7 @@ testthat::test_that("two_stage_gls_null() works for 4PL and NC spline", {
     value, 7.411704234
   )
   testthat::expect_equal(
-    param1, c("gamma0__outcome1_param1" = 0.9685776232)
+    param1, c(0.9685776232)
   )
   
   # Check values for NC spline model
@@ -61,7 +63,7 @@ testthat::test_that("two_stage_gls_null() works for 4PL and NC spline", {
     value, 0
   )
   testthat::expect_equal(
-    param1, c("gamma0__outcome1_param1" = 1)
+    param1, c(1)
   )
   
 })

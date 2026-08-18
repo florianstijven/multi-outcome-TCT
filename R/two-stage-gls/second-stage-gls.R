@@ -50,9 +50,9 @@ gls_criterion <- function(gamma, mean_fn, m_tilde, Sigma_inv) {
 #'  - `optim`: Raw output from the `optim()` function.
 fit_gls <- function(m_tilde, Sigma, mean_fn, jac_mean_fn, start, method = "BFGS") {
   Sigma_inv <- solve(Sigma)
-  gls_gradient <- function(gamma0_vec, ...) {
-    mu_hat <- mean_fn(gamma0_vec)
-    jacobian <- as.matrix(jac_mean_fn(gamma0_vec))
+  gls_gradient <- function(gamma, ...) {
+    mu_hat <- mean_fn(gamma)
+    jacobian <- as.matrix(jac_mean_fn(gamma))
     diff <- m_tilde - mu_hat
     -2 * t(jacobian) %*% Sigma_inv %*% diff
   }
@@ -143,9 +143,8 @@ fit_gls_est_names <- function(gamma_hat, null_model, slowing_models) {
 #' @returns (list) A list containing two elements:
 #' - `gamma0_hat`: A list of estimated reference-trajectory parameters for each outcome.
 #' - `gamma1_hat`: A list of estimated slowing parameters for each outcome.
-fit_gls_split_gamma_hat <- function(gamma_hat, null_model, slowing_models) {
-  J <- length(slowing_models)
-  
+fit_gls_split_gamma_hat <- function(gamma_hat, null_model, working_model) {
+
   gamma0_hat_list <- vector("list", J)
   gamma1_hat_list <- vector("list", J)
   
@@ -192,11 +191,12 @@ fit_gls_split_gamma_hat <- function(gamma_hat, null_model, slowing_models) {
 #'   parameters for each outcome.
 #'  - `criterion`: Value of the GLS criterion function at the optimum.
 #'  - `optim`: Raw output from the `optim()` function.
-two_stage_gls_null <- function(m_tilde, Sigma, slowing_models, start) {
-  # Build the null mean function
-  mean_fn_null <- mu_from_gamma_null_f_factory(slowing_models)
-
-  jac_mean_fn_null <- jac_mu_from_gamma_null_f_factory(slowing_models)
+two_stage_gls_null <- function(m_tilde, Sigma, working_model, start) {
+  if (!inherits(working_model, "model")) {
+    stop("Object is not of class 'model'.")
+  } else {
+    validate_model(working_model)
+  }
   
   # Starting values for gamma0
   if (is.null(start)) {
@@ -210,23 +210,28 @@ two_stage_gls_null <- function(m_tilde, Sigma, slowing_models, start) {
   gls_fitted <- fit_gls(
     m_tilde = m_tilde,
     Sigma = Sigma,
-    mean_fn = mean_fn_null,
-    jac_mean_fn = jac_mean_fn_null,
+    mean_fn = working_model$mean_fn_null,
+    jac_mean_fn = working_model$jacobian_fn_null,
     start = start
   )
   
-  # Annotate the estimates with names
-  gamma_hat_named <- fit_gls_est_names(gls_fitted$gamma_hat,
-                                       null_model = TRUE,
-                                       slowing_models = slowing_models)
+  # # Annotate the estimates with names
+  # gamma_hat_named <- fit_gls_est_names(gls_fitted$gamma_hat,
+  #                                      null_model = TRUE,
+  #                                      working_model = working_model)
+  # 
+  # gamma_hat_list <- fit_gls_split_gamma_hat(gls_fitted$gamma_hat,
+  #                                           null_model = TRUE,
+  #                                           working_model = working_model)
   
-  gamma_hat_list <- fit_gls_split_gamma_hat(gls_fitted$gamma_hat,
-                                            null_model = TRUE,
-                                            slowing_models = slowing_models)
-  
+  # list(
+  #   gamma_hat = gamma_hat_named,
+  #   gamma_hat_list = gamma_hat_list,
+  #   criterion  = gls_fitted$criterion,
+  #   optim      = gls_fitted$optim
+  # )
   list(
-    gamma_hat = gamma_hat_named,
-    gamma_hat_list = gamma_hat_list,
+    gamma_hat = gls_fitted$gamma_hat,
     criterion  = gls_fitted$criterion,
     optim      = gls_fitted$optim
   )
@@ -234,37 +239,41 @@ two_stage_gls_null <- function(m_tilde, Sigma, slowing_models, start) {
 
 
 #' @rdname two_stage_gls_null 
-two_stage_gls_full <- function(m_tilde, Sigma, slowing_models) {
-  # Build the full mean function
-  mean_fn_full <- mu_from_gamma_f_factory(slowing_models)
+two_stage_gls_full <- function(m_tilde, Sigma, working_model, start) {
+
+  # # Starting values for gamma0 and gamma1
+  # start <- unlist(lapply(slowing_models, function(model) {
+  #   c(
+  #     seq_len(model$reference_trajectory_functions_list$no_params),
+  #     model$null_gamma1
+  #   )
+  # }))
   
-  # Starting values for gamma0 and gamma1
-  start <- unlist(lapply(slowing_models, function(model) {
-    c(
-      seq_len(model$reference_trajectory_functions_list$no_params),
-      model$null_gamma1
-    )
-  }))
   # Fit the GLS model under the full model
   gls_fitted <- fit_gls(
     m_tilde = m_tilde,
     Sigma = Sigma,
-    mean_fn = mean_fn_full,
+    mean_fn = working_model$mean_fn,
     start = start
   )
   
-  # Annotate the estimates with names
-  gamma_hat_named <- fit_gls_est_names(gls_fitted$gamma_hat,
-                                       null_model = FALSE,
-                                       slowing_models = slowing_models)
+  # # Annotate the estimates with names
+  # gamma_hat_named <- fit_gls_est_names(gls_fitted$gamma_hat,
+  #                                      null_model = FALSE,
+  #                                      slowing_models = slowing_models)
+  # 
+  # gamma_hat_list <- fit_gls_split_gamma_hat(gls_fitted$gamma_hat,
+  #                                           null_model = FALSE,
+  #                                           slowing_models = slowing_models)
   
-  gamma_hat_list <- fit_gls_split_gamma_hat(gls_fitted$gamma_hat,
-                                            null_model = FALSE,
-                                            slowing_models = slowing_models)
-  
+  # list(
+  #   gamma_hat = gamma_hat_named,
+  #   gamma_hat_list = gamma_hat_list,
+  #   criterion  = gls_fitted$criterion,
+  #   optim      = gls_fitted$optim
+  # )
   list(
-    gamma_hat = gamma_hat_named,
-    gamma_hat_list = gamma_hat_list,
+    gamma_hat = gls_fitted$gamma_hat,
     criterion  = gls_fitted$criterion,
     optim      = gls_fitted$optim
   )

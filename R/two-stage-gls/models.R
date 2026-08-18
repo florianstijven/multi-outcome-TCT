@@ -1,209 +1,183 @@
-#' Slowing-model construction and mean-function helpers
-#'
-#' This file builds the working-model objects used to represent outcome-specific
-#' slowing patterns and to assemble the stacked mean vectors for the null and
-#' full GLS models. The functions here encode the shared reference trajectory,
-#' the outcome-specific time mapping, and the concatenated mean structures used
-#' later in the second-stage fitting routines.
-#'
-#' @keywords internal
-
-#' Construct a slowing model for one outcome
-#'
-#' Creates a model object for a single outcome. The model includes the reference
-#' trajectory shared by the control and experimental groups, along with the time
-#' mapping that relates measurements under treatment to the underlying reference
-#' schedule through a proportional or quadratic slowing function.
-#'
-#' @param times numeric vector of measurement times for the outcome.
-#' @param ref reference trajectory specification passed to
-#'   `reference_trajectory_f_list()`.
-#' @param type character scalar. One of `"proportional"` or `"quadratic"`.
-#'
-#' @returns list containing the model metadata, time-mapping function, null
-#'   slowing parameters, and functions for evaluating the mean vector under the
-#'   null and full parameterizations.
-make_slowing_model <- function(times, ref, type) {
-  if (type == "proportional") {
-    time_mapping = function(t, gamma1) {
-      gamma1 * t
-    }
-    null_gamma1 = 1
-  } else if (type == "quadratic") {
-    time_mapping = function(t, gamma1) {
-      gamma1[1] * t + gamma1[2] * (t ** 2)
-    }
-    null_gamma1 = c(1, 0)
-  } else {
-    stop("Unknown slowing model type: ", type)
-  }
-
-  reference_trajectory_functions_list = reference_trajectory_f_list(times, ref)
-
-  list(
-    type        = "proportional",
-    ref         = ref,
-    times = times,
-    reference_trajectory_functions_list = reference_trajectory_functions_list,
-    null_gamma1 = null_gamma1,
-    time_mapping = time_mapping,
-    mu_from_gamma_null = function(gamma0) {
-      control_means = reference_trajectory_functions_list$eval(times, gamma0)
-      exp_means = reference_trajectory_functions_list$eval(time_mapping(times, null_gamma1), gamma0)
-      c(control_means, exp_means)
-    },
-    mu_from_gamma = function(gamma) {
-      # Number of reference-trajectory parameters.
-      no_params_ref = reference_trajectory_functions_list$no_params
-
-      gamma0 = gamma[1:no_params_ref]
-      gamma1 = gamma[(no_params_ref + 1):length(gamma)]
-
-      control_means = reference_trajectory_functions_list$eval(times, gamma0)
-      exp_means = reference_trajectory_functions_list$eval(time_mapping(times, gamma1), gamma0)
-
-      c(control_means, exp_means)
-    }
+new_model <- function(x = list()) {
+  stopifnot(is.list(x))
+  
+  # Add null functions for mean and Jacobian to the model object.
+  mean_fn_null <- mean_fn_null_constructor(
+    mean_fn = x$mean_fn,
+    nuisance_params_position = x$nuisance_params_position,
+    treatment_params_null = x$treatment_params_null
+  )
+  
+  jacobian_fn_null <- jacobian_fn_null_constructor(
+    jacobian_fn = x$jacobian_fn,
+    nuisance_params_position = x$nuisance_params_position,
+    treatment_params_null = x$treatment_params_null
+  )
+  
+  # Jacobian of the mean function with respect to treatment-effect parameters at
+  # the null, given the (estimated) nuisance parameters.
+  jacobian_fn_treatment_null <- jacobian_fn_treatment_null_constructor(
+    jacobian_fn = x$jacobian_fn,
+    nuisance_params_position = x$nuisance_params_position,
+    treatment_params_null = x$treatment_params_null
+  )
+  
+  x$mean_fn_null <- mean_fn_null
+  x$jacobian_fn_null <- jacobian_fn_null
+  x$jacobian_fn_treatment_null <- jacobian_fn_treatment_null
+  
+  
+  structure(
+    x,
+    class = "model"
   )
 }
 
-#' Construct one slowing model per outcome
-#'
-#' Applies `make_slowing_model()` to each time vector in a list, generating a
-#' model object for each outcome under the same reference-trajectory structure
-#' and slowing-model type.
-#'
-#' @param times list of numeric measurement-time vectors, one per outcome.
-#' @param ref reference trajectory specification passed to each call to
-#'   `make_slowing_model()`.
-#' @param type character scalar passed to `make_slowing_model()`.
-#'
-#' @returns list of slowing-model objects, one for each outcome.
-make_slowing_models <- function(times, ref, type) {
-  lapply(times, make_slowing_model, ref = ref, type = type)
-}
-
-#' Create a full-model mean function from a list of slowing models
-#'
-#' Builds a function that maps a concatenated parameter vector to the vector of
-#' control and experimental mean responses across all outcomes. The parameter
-#' vector is arranged outcome by outcome, with reference-trajectory parameters
-#' followed by slowing parameters.
-#'
-#' @param slowing_models list returned by `make_slowing_models()`.
-#'
-#' @returns function taking the full parameter vector and returning the stacked
-#'   mean vector for all outcomes.
-mu_from_gamma_f_factory <- function(slowing_models) {
-  function(gamma) {
-    # Number of outcomes
-    J <- length(slowing_models)
-
-    # Number of reference-trajectory parameters for each outcome.
-    no_params_ref_vec <- sapply(slowing_models, function(model)
-      model$reference_trajectory_functions_list$no_params)
-
-    # Number of slowing parameters for each outcome.
-    no_params_slowing_vec <- sapply(slowing_models, function(model)
-      length(model$null_gamma1))
-
-    check_no_params(gamma, sum(no_params_ref_vec) + sum(no_params_slowing_vec))
-
-    mu_blocks <- vector("list", J)
-    for (outcome_idx in seq_len(J)) {
-      # K <- no_of_measurements_vec[outcome_idx] - 1
-      if (outcome_idx == 1) {
-        start_col <- 1
-      } else {
-        start_col <- sum(no_params_ref_vec[1:(outcome_idx - 1)]) + sum(no_params_slowing_vec[1:(outcome_idx - 1)]) + 1
-      }
-      t1 <- start_col + no_params_ref_vec[outcome_idx] - 1
-      gamma0 <- gamma[start_col:t1]
-      gamma1 <- gamma[t1:(t1 + no_params_slowing_vec[outcome_idx] - 1)]
-
-      mu_blocks[[outcome_idx]] <- slowing_models[[outcome_idx]]$mu_from_gamma(c(gamma0, gamma1))
-    }
-    do.call(c, mu_blocks)
+mean_fn_null_constructor <- function(mean_fn, nuisance_params_position, treatment_params_null) {
+  function(gamma0) {
+    gamma <- numeric(length = length(nuisance_params_position) + length(treatment_params_null))
+    gamma[nuisance_params_position] <- gamma0
+    gamma[-nuisance_params_position] <- treatment_params_null
+    
+    mean_fn(gamma)
   }
 }
 
-#' Create the null-model mean function for a list of slowing models
-#'
-#' Under the null model, only the reference-trajectory parameters are estimated,
-#' while each outcome uses its own model-specific null slowing values. This
-#' factory returns a function that maps the concatenated reference parameters to
-#' the stacked null mean vector.
-#'
-#' @param slowing_models list returned by `make_slowing_models()`.
-#'
-#' @returns function taking the concatenated reference-trajectory parameters and
-#'   returning the corresponding null mean vector.
-mu_from_gamma_null_f_factory <- function(slowing_models) {
-  function(gamma) {
-    # Number of outcomes
-    J <- length(slowing_models)
-
-    # Number of reference-trajectory parameters for each outcome.
-    no_params_ref_vec <- sapply(slowing_models, function(model)
-      model$reference_trajectory_functions_list$no_params)
-
-    check_no_params(gamma, sum(no_params_ref_vec))
-
-    mu_blocks <- vector("list", J)
-    for (outcome_idx in seq_len(J)) {
-      # K <- no_of_measurements_vec[outcome_idx] - 1
-      if (outcome_idx == 1) {
-        start_col <- 1
-      } else {
-        start_col <- sum(no_params_ref_vec[1:(outcome_idx - 1)]) + 1
-      }
-      t1 <- start_col + no_params_ref_vec[outcome_idx] - 1
-      gamma0 <- gamma[start_col:t1]
-
-      mu_blocks[[outcome_idx]] <- slowing_models[[outcome_idx]]$mu_from_gamma_null(gamma0)
-    }
-    do.call(c, mu_blocks)
+jacobian_fn_null_constructor <- function(jacobian_fn, nuisance_params_position, treatment_params_null) {
+  function(gamma0) {
+    gamma <- numeric(length = length(nuisance_params_position) + length(treatment_params_null))
+    gamma[nuisance_params_position] <- gamma0
+    gamma[-nuisance_params_position] <- treatment_params_null
+    
+    jacobian <- jacobian_fn(gamma)
+    
+    browser()
+    
+    jacobian[, nuisance_params_position]
   }
 }
 
-#' Create the Jacobian of the null-model mean function
-#'
-#' Computes the block-diagonal Jacobian for the null mean function. Each block
-#' corresponds to one outcome and contains the derivatives of the stacked control
-#' and experimental means with respect to that outcome's reference-trajectory
-#' parameters.
-#'
-#' @param slowing_models list returned by `make_slowing_models()`.
-#'
-#' @returns function taking the null parameter vector and returning the block-
-#'   diagonal Jacobian matrix.
-jac_mu_from_gamma_null_f_factory <- function(slowing_models) {
+jacobian_fn_treatment_null_constructor <- function(jacobian_fn, nuisance_params_position, treatment_params_null) {
   function(gamma) {
-    # Number of outcomes
-    J <- length(slowing_models)
-
-    # Number of reference-trajectory parameters for each outcome.
-    no_params_ref_vec <- sapply(slowing_models, function(model)
-      model$reference_trajectory_functions_list$no_params)
-
-    check_no_params(gamma, sum(no_params_ref_vec))
-
-    jac_blocks <- vector("list", J)
-    for (outcome_idx in seq_len(J)) {
-      # K <- no_of_measurements_vec[outcome_idx] - 1
-      if (outcome_idx == 1) {
-        start_col <- 1
-      } else {
-        start_col <- sum(no_params_ref_vec[1:(outcome_idx - 1)]) + 1
-      }
-      t1 <- start_col + no_params_ref_vec[outcome_idx] - 1
-      gamma0 <- gamma[start_col:t1]
-
-      times = rep(slowing_models[[outcome_idx]]$times, 2)
-      jac_blocks[[outcome_idx]] <-
-        slowing_models[[outcome_idx]]$reference_trajectory_functions_list$jacobian(times = times, params = gamma0)[, ]
-
-    }
-    Matrix::bdiag(jac_blocks)
+    gamma <- numeric(length = length(nuisance_params_position) + length(treatment_params_null))
+    gamma[nuisance_params_position] <- gamma0
+    gamma[-nuisance_params_position] <- treatment_params_null
+    
+    jacobian <- jacobian_fn(gamma)
+    
+    jacobian[, -nuisance_params_position]
   }
 }
+
+model <- function(mean_fn, jacobian_fn, nuisance_params_position, treatment_params_null) {
+  new_model(
+    list(
+      mean_fn = mean_fn,
+      jacobian_fn = jacobian_fn,
+      nuisance_params_position = nuisance_params_position,
+      treatment_params_null = treatment_params_null
+    )
+  )
+}
+
+concatenate_models <- function(models) {
+  if (!all(sapply(models, inherits, "model"))) {
+    stop("All elements of 'models' must be of class 'model'.")
+  } else {
+    lapply(models, validate_model)
+  }
+  
+  # Vector with the number of nuisance parameters for each model.
+  nuisance_params_counts <- sapply(models, function(model) length(model$nuisance_params_position))
+  # Vector with the number of treatment parameters for each model.
+  treatment_params_counts <- sapply(models, function(model) length(model$treatment_params_null))
+  # Vector with the total number of parameters for each model.
+  total_params_counts <- nuisance_params_counts + treatment_params_counts
+  # Vector with the starting index of each model's parameters in the combined parameter vector.
+  start_indices_full <- cumsum(c(1, total_params_counts[-length(total_params_counts)]))
+  start_indices_null <- cumsum(c(1, nuisance_params_counts[-length(nuisance_params_counts)]))
+  
+  mean_fn_combined <- function(gamma) {
+    do.call(c,
+            purrr::map2(
+              .x = models,
+              .y = start_indices_full,
+              .f =  function(model, start_index) {
+                end_index <- start_index + length(model$nuisance_params_position) + length(model$treatment_params_null) - 1
+                model$mean_fn(gamma[start_index:end_index])
+              }
+            ))
+  }
+  
+  # mean_fn_null_combined <- function(gamma0) {
+  #   do.call(
+  #     c,
+  #     purrr::map2(.x = models, .y = start_indices_null),
+  #     .f =  function(model, start_index) {
+  #       end_index <- start_index + length(model$nuisance_params_position) - 1
+  #       model$mean_fn_null(gamma0[start_index:end_index])
+  #     }
+  #   )
+  # }
+  
+  jacobian_fn_combined <- function(gamma) {
+    do.call(Matrix::bdiag, purrr::map2(.x = models, .y = start_indices_full, .f = function(model, start_index) {
+      end_index <- start_index + length(model$nuisance_params_position) + length(model$treatment_params_null) - 1
+      model$jacobian_fn(gamma[start_index:end_index])
+    }))
+  }
+  
+  # jacobian_fn_null_combined <- function(gamma0) {
+  #   do.call(Matrix::bdiag, purrr::map2(.x = models, .y = start_indices_null, .f = function(model, start_index) {
+  #     end_index <- start_index + length(model$nuisance_params_position) - 1
+  #     model$jacobian_fn_null(gamma0[start_index:end_index])
+  #   }))
+  # }
+  # 
+  # jacobian_fn_treatment_null_combined <- function(gamma0) {
+  #   do.call(Matrix::bdiag, purrr::map2(.x = models, .y = start_indices_null, .f = function(model, start_index) {
+  #     end_index <- start_index + length(model$nuisance_params_position) - 1
+  #     model$jacobian_fn_treatment_null(gamma0[start_index:end_index])
+  #   }))
+  # }
+  
+  nuisance_params_position_combined <- unlist(purrr::map2(.x = models, .y = start_indices_full, function(model, start_index) model$nuisance_params_position + start_index - 1))
+  treatment_params_null_combined <- unlist(lapply(models, function(model) model$treatment_params_null))
+  
+  new_model(
+    list(
+      mean_fn = mean_fn_combined,
+      jacobian_fn = jacobian_fn_combined,
+      nuisance_params_position = nuisance_params_position_combined,
+      treatment_params_null = treatment_params_null_combined
+    )
+  )
+}
+
+validate_model <- function(model) {
+  required_fields <- c("mean_fn", "jacobian_fn", "nuisance_params_position", "treatment_params_null")
+  
+  missing_fields <- setdiff(required_fields, names(model))
+  if (length(missing_fields) > 0) {
+    stop("Model is missing required fields: ", paste(missing_fields, collapse = ", "))
+  }
+  
+  if (!is.function(model$mean_fn)) {
+    stop("'mean_fn' must be a function.")
+  }
+  
+  if (!is.function(model$jacobian_fn)) {
+    stop("'jacobian_fn' must be a function.")
+  }
+  
+  if (!is.numeric(model$nuisance_params_position) || any(model$nuisance_params_position <= 0)) {
+    stop("'nuisance_params_position' must be a numeric vector of positive integers.")
+  }
+  
+  if (!is.numeric(model$treatment_params_null)) {
+    stop("'treatment_params_null' must be a numeric vector.")
+  }
+  
+  TRUE
+}
+
