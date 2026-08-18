@@ -48,11 +48,9 @@ jacobian_fn_null_constructor <- function(jacobian_fn, nuisance_params_position, 
     gamma <- numeric(length = length(nuisance_params_position) + length(treatment_params_null))
     gamma[nuisance_params_position] <- gamma0
     gamma[-nuisance_params_position] <- treatment_params_null
-    
+
     jacobian <- jacobian_fn(gamma)
-    
-    browser()
-    
+
     jacobian[, nuisance_params_position]
   }
 }
