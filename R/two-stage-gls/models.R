@@ -56,14 +56,14 @@ jacobian_fn_null_constructor <- function(jacobian_fn, nuisance_params_position, 
 }
 
 jacobian_fn_treatment_null_constructor <- function(jacobian_fn, nuisance_params_position, treatment_params_null) {
-  function(gamma) {
+  function(gamma0) {
     gamma <- numeric(length = length(nuisance_params_position) + length(treatment_params_null))
     gamma[nuisance_params_position] <- gamma0
     gamma[-nuisance_params_position] <- treatment_params_null
     
     jacobian <- jacobian_fn(gamma)
     
-    jacobian[, -nuisance_params_position]
+    jacobian[, -nuisance_params_position, drop = FALSE]
   }
 }
 
@@ -107,37 +107,12 @@ concatenate_models <- function(models) {
             ))
   }
   
-  # mean_fn_null_combined <- function(gamma0) {
-  #   do.call(
-  #     c,
-  #     purrr::map2(.x = models, .y = start_indices_null),
-  #     .f =  function(model, start_index) {
-  #       end_index <- start_index + length(model$nuisance_params_position) - 1
-  #       model$mean_fn_null(gamma0[start_index:end_index])
-  #     }
-  #   )
-  # }
-  
   jacobian_fn_combined <- function(gamma) {
     do.call(Matrix::bdiag, purrr::map2(.x = models, .y = start_indices_full, .f = function(model, start_index) {
       end_index <- start_index + length(model$nuisance_params_position) + length(model$treatment_params_null) - 1
       model$jacobian_fn(gamma[start_index:end_index])
     }))
   }
-  
-  # jacobian_fn_null_combined <- function(gamma0) {
-  #   do.call(Matrix::bdiag, purrr::map2(.x = models, .y = start_indices_null, .f = function(model, start_index) {
-  #     end_index <- start_index + length(model$nuisance_params_position) - 1
-  #     model$jacobian_fn_null(gamma0[start_index:end_index])
-  #   }))
-  # }
-  # 
-  # jacobian_fn_treatment_null_combined <- function(gamma0) {
-  #   do.call(Matrix::bdiag, purrr::map2(.x = models, .y = start_indices_null, .f = function(model, start_index) {
-  #     end_index <- start_index + length(model$nuisance_params_position) - 1
-  #     model$jacobian_fn_treatment_null(gamma0[start_index:end_index])
-  #   }))
-  # }
   
   nuisance_params_position_combined <- unlist(purrr::map2(.x = models, .y = start_indices_full, function(model, start_index) model$nuisance_params_position + start_index - 1))
   treatment_params_null_combined <- unlist(lapply(models, function(model) model$treatment_params_null))
@@ -148,6 +123,125 @@ concatenate_models <- function(models) {
       jacobian_fn = jacobian_fn_combined,
       nuisance_params_position = nuisance_params_position_combined,
       treatment_params_null = treatment_params_null_combined
+    )
+  )
+}
+
+shared_parameter_model <- function(model, shared_param_positions) {
+  # `shared_param_positions` must be a numeric vector of positive integers
+  # indicating the positions of the shared parameters in the full parameter
+  # vector, or it should be a list of such vectors, one for each shared
+  # parameter.
+  if (!(is.list(shared_param_positions) || is.numeric(shared_param_positions))) {
+    stop("'shared_param_positions' must be a numeric vector of positive integers, or a list of such vectors.")
+  }
+  if (!is.list(shared_param_positions)) {
+    # We further work with a list of shared parameter positions, even if there
+    # is only one shared parameter.
+    shared_param_positions <- list(shared_param_positions)
+  }
+  
+  # Construct a model for the parameters of `model`, taking into account the
+  # shared parameters. The new parameter vector will have one entry for each
+  # shared parameter, and one entry for each non-shared parameter. The mean
+  # function of the new model will map the new parameter vector to the full
+  # parameter vector of `model`.
+  no_of_non_shared_params <- length(model$nuisance_params_position) + length(model$treatment_params_null) - length(unlist(shared_param_positions))
+  no_of_params <- length(model$nuisance_params_position) + length(model$treatment_params_null)
+  no_of_non_shared_treatment_params <- length(model$treatment_params_null) - length(unlist(shared_param_positions))
+  
+  mean_fn_params <- function(gamma_shared) {
+    # Construct the full parameter vector for `model` from the parameters of
+    # `gamma_shared`, taking into account the shared parameters.
+    gamma_full <- numeric(length = no_of_params)
+    gamma_full[-unlist(shared_param_positions)] <- gamma_shared[seq_along(no_of_non_shared_params)]
+    
+    # Fill in the shared parameters.
+    for (i in seq_along(shared_param_positions)) {
+      shared_param_positions_i <- shared_param_positions[[i]]
+      gamma_full[shared_param_positions_i] <- gamma_shared[no_of_non_shared_params + i]
+    }
+    gamma_full
+  }
+  
+  jacobian_fn_params <- function(gamma_shared) {
+    jacobian_full <- matrix(0, nrow = no_of_params, ncol = length(gamma_shared))
+    # Fill in the Jacobian for the non-shared parameters.
+    jacobian_full[-unlist(shared_param_positions), seq_len(no_of_non_shared_params)] <- diag(1, nrow = no_of_non_shared_params)
+    
+    # Fill in the Jacobian for the shared parameters.
+    for (i in seq_along(shared_param_positions)) {
+      shared_param_positions_i <- shared_param_positions[[i]]
+      jacobian_full[shared_param_positions_i, no_of_non_shared_params + i] <- 1
+    }
+    jacobian_full
+  }
+  
+  # The function assumes that only treatment-effect parameters can be shared.
+  # The treatment-effect parameters are grouped together at the end of the
+  # parameter vector, so the nuisance parameters the first
+  # `length(model$nuisance_params_position)` entries of the parameter vector.
+  nuisance_params_position = seq_len(length(model$nuisance_params_position))
+  
+  # Determine the null values for the non-shared treatment-effect parameters.
+  non_shared_treatment_params_position_complement <- c(model$nuisance_params_position, unlist(shared_param_positions))
+  non_shared_treatment_params_position <- seq_len(no_of_params)[-non_shared_treatment_params_position_complement]
+  treatment_params_position <-  seq_len(no_of_params)[-model$nuisance_params_position]
+  # Relative position of the non-shared treatment-effect parameters in the
+  # original treatment-effect parameter vector.
+  non_shared_treatment_params_position_subset <- sapply(
+    non_shared_treatment_params_position,
+    function(pos) {
+      which.max(treatment_params_position == pos)
+    }
+  )
+  shared_treatment_params_position_subset <- 
+    sapply(
+      shared_param_positions,
+      function(positions) {
+        which.max(treatment_params_position %in% positions)
+      }
+    )
+  
+  if (length(non_shared_treatment_params_position_subset) == 0) {
+    non_shared_treatment_params_position_subset <- integer(0)
+  }
+  
+  treatment_params_null <- numeric(length = no_of_non_shared_treatment_params + length(shared_param_positions))
+  
+  treatment_params_null[seq_len(no_of_non_shared_treatment_params)] <- model$treatment_params_null[non_shared_treatment_params_position_subset]
+  treatment_params_null[length(shared_param_positions) + no_of_non_shared_treatment_params] <- model$treatment_params_null[shared_treatment_params_position_subset]
+  
+  model_for_params <- model(
+    mean_fn = mean_fn_params,
+    jacobian_fn = jacobian_fn_params,
+    nuisance_params_position = nuisance_params_position,
+    treatment_params_null = treatment_params_null
+  )
+  model_for_model_params(model, model_for_params)
+}
+
+model_for_model_params <- function(model, model_for_params) {
+  mean_fn_model_params <- function(gamma_model_params) {
+    gamma_full <- model_for_params$mean_fn(gamma_model_params)
+    model$mean_fn(gamma_full)
+  }
+  
+  jacobian_fn_model_params <- function(gamma_model_params) {
+    gamma_full <- model_for_params$mean_fn(gamma_model_params)
+    jacobian_full <- model$jacobian_fn(gamma_full)
+    
+    jacobian_model_params <- model_for_params$jacobian_fn(gamma_model_params)
+    
+    jacobian_full %*% jacobian_model_params
+  }
+  
+  new_model(
+    list(
+      mean_fn = mean_fn_model_params,
+      jacobian_fn = jacobian_fn_model_params,
+      nuisance_params_position = model_for_params$nuisance_params_position,
+      treatment_params_null = model_for_params$treatment_params_null
     )
   )
 }

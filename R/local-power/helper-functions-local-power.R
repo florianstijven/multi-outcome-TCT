@@ -327,7 +327,7 @@ jacobian_slowing_multiple_outcomes_shared <- function(J,
 build_contrast_matrix <- function(jacobian, A, Sigma) {
   # B_contrast <- t(A) %*% solve(A %*% Sigma %*% t(A)) %*% A %*% jacobian
   B_contrast <- t(A) %*% MASS::ginv(A %*% Sigma %*% t(A)) %*% A %*% jacobian
-  t(B_contrast)
+  Matrix::t(B_contrast)
 }
 
 

@@ -36,32 +36,31 @@
 #'  - `statistic`: The computed test statistic.
 #'  - `df`: The degrees of freedom for the test statistic.
 #'  - `p_value`: The p-value associated with the test statistic.
-targeted_test_proportional_slowing <- function(m_tilde, Sigma, shared, slowing_models, start) {
+targeted_test <- function(m_tilde, Sigma, working_model, A, shared_matrix, start) {
   # Step 1: Fit working model under the null.
   gls_fitted_null <- two_stage_gls_null(m_tilde = m_tilde,
                                         Sigma   = Sigma,
-                                        slowing_models = slowing_models, 
+                                        working_model = working_model, 
                                         start = start)
   
   # Step 2: build the Jacobian at the null estimate
-  
-  jac <- build_jacobian_at_null(
-    gamma0  = gls_fitted_null$gamma_hat_list$gamma0_hat,
-    slowing_models = slowing_models,
-    shared      = shared
+  jacobian <- working_model$jacobian_fn_treatment_null(
+    gamma0 = gls_fitted_null$gamma_hat
   )
   
+  # If parameters are shared across outcomes, we need to adjust the Jacobian to
+  # account for the shared structure.
+  if (is.null(shared_matrix)) {
+    shared_matrix <- diag(1, nrow = ncol(jacobian))
+  }
+  jacobian <- jacobian %*% shared_matrix
   
-  # Step 3: build the omnibus contrast matrix and then B_n
-  A <- build_omnibus_contrast_multi_outcome(
-    times = slowing_models %>% lapply(function(model) model$times)
-  )
-  B_n <- build_contrast_matrix(jacobian = jac,
+  B_n <- build_contrast_matrix(jacobian = jacobian,
                                A = A,
                                Sigma = Sigma)
   
   # Step 4: evaluate the test statistic
-  test <- targeted_test_statistic(B_n = B_n,
+  test <- targeted_test_statistic(B = B_n,
                                   m_tilde = m_tilde,
                                   Sigma = Sigma)
   
@@ -75,43 +74,43 @@ targeted_test_proportional_slowing <- function(m_tilde, Sigma, shared, slowing_m
 }
 
 
-#' Build Jacobian of Slowing Model
-#'
-#' @param gamma0 (list) A list of reference-trajectory parameters under the null
-#'   hypothesis. Each element of the list corresponds to an outcome.
-#' @inheritParams two_stage_gls_null
-#'
-#' @returns (matrix) The Jacobian matrix of the slowing model evaluated at the
-#'   null estimate.
-build_jacobian_at_null <- function(gamma0, slowing_models, shared) {
-  if (slowing_models[[1]]$type != "proportional") {
-    stop("Only proportional slowing is currently supported for the targeted test.")
-  }
-  if (slowing_models[[1]]$ref == "nc_spline") {
-    times = slowing_models[[1]]$times
-    knots = times[-c(1, length(times))]
-    boundary_knots = c(times[1], times[length(times)])
-  }
-  if (shared) {
-    jacobian_slowing_multiple_outcomes_shared(
-      times = slowing_models %>% lapply(function(model) model$times),
-      ref = slowing_models[[1]]$ref,
-      params_list = gamma0,
-      slowing_only = TRUE,
-      knots = knots,
-      boundary_knots = boundary_knots
-    )
-  } else {
-    jacobian_slowing_multiple_outcomes(
-      times = slowing_models %>% lapply(function(model) model$times),
-      ref = slowing_models[[1]]$ref,
-      params_list = gamma0,
-      slowing_only = TRUE,
-      knots = knots,
-      boundary_knots = boundary_knots
-    )
-  }
-}
+#' #' Build Jacobian of Slowing Model
+#' #'
+#' #' @param gamma0 (list) A list of reference-trajectory parameters under the null
+#' #'   hypothesis. Each element of the list corresponds to an outcome.
+#' #' @inheritParams two_stage_gls_null
+#' #'
+#' #' @returns (matrix) The Jacobian matrix of the slowing model evaluated at the
+#' #'   null estimate.
+#' build_jacobian_at_null <- function(gamma0, slowing_models, shared) {
+#'   if (slowing_models[[1]]$type != "proportional") {
+#'     stop("Only proportional slowing is currently supported for the targeted test.")
+#'   }
+#'   if (slowing_models[[1]]$ref == "nc_spline") {
+#'     times = slowing_models[[1]]$times
+#'     knots = times[-c(1, length(times))]
+#'     boundary_knots = c(times[1], times[length(times)])
+#'   }
+#'   if (shared) {
+#'     jacobian_slowing_multiple_outcomes_shared(
+#'       times = slowing_models %>% lapply(function(model) model$times),
+#'       ref = slowing_models[[1]]$ref,
+#'       params_list = gamma0,
+#'       slowing_only = TRUE,
+#'       knots = knots,
+#'       boundary_knots = boundary_knots
+#'     )
+#'   } else {
+#'     jacobian_slowing_multiple_outcomes(
+#'       times = slowing_models %>% lapply(function(model) model$times),
+#'       ref = slowing_models[[1]]$ref,
+#'       params_list = gamma0,
+#'       slowing_only = TRUE,
+#'       knots = knots,
+#'       boundary_knots = boundary_knots
+#'     )
+#'   }
+#' }
 
 
 
@@ -125,8 +124,8 @@ build_jacobian_at_null <- function(gamma0, slowing_models, shared) {
 #' - `df`: The degrees of freedom for the test statistic.
 #' - `p_value`: The p-value associated with the test statistic.
 targeted_test_statistic <- function(B, m_tilde, Sigma) {
-  BSB_inv <- solve(B %*% Sigma %*% t(B))
-  T_hat <- as.numeric(t(m_tilde) %*% t(B) %*% BSB_inv %*% B %*% m_tilde)
+  BSB_inv <- solve(B %*% Sigma %*% Matrix::t(B))
+  T_hat <- as.numeric(t(m_tilde) %*% Matrix::t(B) %*% BSB_inv %*% B %*% m_tilde)
   df <- nrow(B)
   p_value <- stats::pchisq(T_hat, df = df, lower.tail = FALSE)
   list(statistic = T_hat, df = df, p_value = p_value)

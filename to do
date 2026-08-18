@@ -7,7 +7,3 @@ to be not invertible, the contrast-based test may still work with A Sigma A bein
 invertible. I could implement this by allowing for user-specified blocks in which 
 GLS is performed separately.
 
-* Implement general working model? This only requires mean_fn, jacobian_fn, and 
-a specification of the rows in jacobian_fn that correspond to treatment effects
-plus their null values. 
-
