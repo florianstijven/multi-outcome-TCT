@@ -74,43 +74,6 @@ targeted_test <- function(m_tilde, Sigma, working_model, A, shared_matrix, start
 }
 
 
-#' #' Build Jacobian of Slowing Model
-#' #'
-#' #' @param gamma0 (list) A list of reference-trajectory parameters under the null
-#' #'   hypothesis. Each element of the list corresponds to an outcome.
-#' #' @inheritParams two_stage_gls_null
-#' #'
-#' #' @returns (matrix) The Jacobian matrix of the slowing model evaluated at the
-#' #'   null estimate.
-#' build_jacobian_at_null <- function(gamma0, slowing_models, shared) {
-#'   if (slowing_models[[1]]$type != "proportional") {
-#'     stop("Only proportional slowing is currently supported for the targeted test.")
-#'   }
-#'   if (slowing_models[[1]]$ref == "nc_spline") {
-#'     times = slowing_models[[1]]$times
-#'     knots = times[-c(1, length(times))]
-#'     boundary_knots = c(times[1], times[length(times)])
-#'   }
-#'   if (shared) {
-#'     jacobian_slowing_multiple_outcomes_shared(
-#'       times = slowing_models %>% lapply(function(model) model$times),
-#'       ref = slowing_models[[1]]$ref,
-#'       params_list = gamma0,
-#'       slowing_only = TRUE,
-#'       knots = knots,
-#'       boundary_knots = boundary_knots
-#'     )
-#'   } else {
-#'     jacobian_slowing_multiple_outcomes(
-#'       times = slowing_models %>% lapply(function(model) model$times),
-#'       ref = slowing_models[[1]]$ref,
-#'       params_list = gamma0,
-#'       slowing_only = TRUE,
-#'       knots = knots,
-#'       boundary_knots = boundary_knots
-#'     )
-#'   }
-#' }
 
 
 

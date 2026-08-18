@@ -1,9 +1,18 @@
-* Implement contrast functions for quadratic slowing (in helper-functions-local-power)
-
 * Implement more unit tests
 
 * Fit slowing_models under the null outcome by outcome. This would allow for Sigma
 to be not invertible, the contrast-based test may still work with A Sigma A being 
 invertible. I could implement this by allowing for user-specified blocks in which 
 GLS is performed separately.
+  - Since this has nothing to do with the model itself, maybe add it as a feature to 
+  other functions.
+  - Relatedly, we could add "outcome strata" and "treatment strata" for plotting. 
+  If we have the fitted parameters, model, m_tilde, and Sigma, we can easily 
+  construct a GoF plot with SEs for the true means. 
+  
+* Add more features for building models for small building blocks?
+  - I don't know which features beyond concatenation and shared parameters could be useful though.
+  
+* improve documentation
+
 

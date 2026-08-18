@@ -215,21 +215,6 @@ two_stage_gls_null <- function(m_tilde, Sigma, working_model, start) {
     start = start
   )
   
-  # # Annotate the estimates with names
-  # gamma_hat_named <- fit_gls_est_names(gls_fitted$gamma_hat,
-  #                                      null_model = TRUE,
-  #                                      working_model = working_model)
-  # 
-  # gamma_hat_list <- fit_gls_split_gamma_hat(gls_fitted$gamma_hat,
-  #                                           null_model = TRUE,
-  #                                           working_model = working_model)
-  
-  # list(
-  #   gamma_hat = gamma_hat_named,
-  #   gamma_hat_list = gamma_hat_list,
-  #   criterion  = gls_fitted$criterion,
-  #   optim      = gls_fitted$optim
-  # )
   list(
     gamma_hat = gls_fitted$gamma_hat,
     criterion  = gls_fitted$criterion,
@@ -240,14 +225,6 @@ two_stage_gls_null <- function(m_tilde, Sigma, working_model, start) {
 
 #' @rdname two_stage_gls_null 
 two_stage_gls_full <- function(m_tilde, Sigma, working_model, start) {
-
-  # # Starting values for gamma0 and gamma1
-  # start <- unlist(lapply(slowing_models, function(model) {
-  #   c(
-  #     seq_len(model$reference_trajectory_functions_list$no_params),
-  #     model$null_gamma1
-  #   )
-  # }))
   
   # Fit the GLS model under the full model
   gls_fitted <- fit_gls(
@@ -257,21 +234,6 @@ two_stage_gls_full <- function(m_tilde, Sigma, working_model, start) {
     start = start
   )
   
-  # # Annotate the estimates with names
-  # gamma_hat_named <- fit_gls_est_names(gls_fitted$gamma_hat,
-  #                                      null_model = FALSE,
-  #                                      slowing_models = slowing_models)
-  # 
-  # gamma_hat_list <- fit_gls_split_gamma_hat(gls_fitted$gamma_hat,
-  #                                           null_model = FALSE,
-  #                                           slowing_models = slowing_models)
-  
-  # list(
-  #   gamma_hat = gamma_hat_named,
-  #   gamma_hat_list = gamma_hat_list,
-  #   criterion  = gls_fitted$criterion,
-  #   optim      = gls_fitted$optim
-  # )
   list(
     gamma_hat = gls_fitted$gamma_hat,
     criterion  = gls_fitted$criterion,
