@@ -206,11 +206,11 @@ shared_parameter_model <- function(model, shared_param_positions) {
   if (length(non_shared_treatment_params_position_subset) == 0) {
     non_shared_treatment_params_position_subset <- integer(0)
   }
-  
+
   treatment_params_null <- numeric(length = no_of_non_shared_treatment_params + length(shared_param_positions))
   
   treatment_params_null[seq_len(no_of_non_shared_treatment_params)] <- model$treatment_params_null[non_shared_treatment_params_position_subset]
-  treatment_params_null[length(shared_param_positions) + no_of_non_shared_treatment_params] <- model$treatment_params_null[shared_treatment_params_position_subset]
+  treatment_params_null[1:length(shared_param_positions) + no_of_non_shared_treatment_params] <- model$treatment_params_null[shared_treatment_params_position_subset]
   
   model_for_params <- model(
     mean_fn = mean_fn_params,
