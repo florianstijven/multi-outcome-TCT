@@ -23,7 +23,7 @@ testthat::test_that("4PL reference helpers return expected shapes and ranges", {
   testthat::expect_length(curve, length(times))
   testthat::expect_true(all(curve > 0 & curve < 1))
   testthat::expect_equal(dim(jac), c(length(times), 2))
-  testthat::expect_equal(d_time, jac[, 1], tolerance = 1e-12)
+  testthat::expect_equal(d_time, -1 * jac[, 1], tolerance = 1e-12)
 })
 
 testthat::test_that("nc spline reference helpers return expected shapes and ranges", {
@@ -167,7 +167,7 @@ testthat::test_that("jacobian constructors return correct dimensions and slowing
     c(2.2, 1.4)
   )
 
-  jac_single <- jacobian_slowing_single_outcome(
+  jac_single <- jacobian_slowing_single_outcome_temp(
     K = k,
     times = times,
     ref = "4PL",
@@ -357,7 +357,7 @@ testthat::test_that("local_shift_vector_slowing_outcome() and mean_vector() retu
   )
 
   testthat::expect_equal(result1, expected1, tolerance = 1e-10)
-  testthat::expect_equal(as.numeric(result2), expected2, tolerance = 1e-10)
+  testthat::expect_equal(as.numeric(result2), -1 * expected2, tolerance = 1e-10)
 
   ref <- "nc_spline"
   params_list <- list(

@@ -136,21 +136,21 @@ mean_vector <- function(ref = "4PL",
 # Jacobian functions
 # ============================================================================
 
-jacobian_slowing_single_outcome <- function(K, times, ref = "4PL", params, ...) {
+jacobian_slowing_single_outcome_temp <- function(K, times, ref = "4PL", params, ...) {
   jacobian_ref <- jacobian_ref_pm(times, ref = ref, params = params, ...)
   if (is.null(dim(jacobian_ref))) {
     jacobian_ref <- matrix(jacobian_ref, ncol = 1)
   }
   no_params_ref <- ncol(jacobian_ref)
   jacobian <- matrix(0, nrow = 2 * (K + 1), ncol = no_params_ref + 1)
-  
+
   # Jacobian of the control group (first K+1 rows) with respect to reference parameters.
   jacobian[1:(K + 1), 1:no_params_ref] <- jacobian_ref
   # Jacobian of the treatment group (last K+1 rows) with respect to reference parameters.
   jacobian[(K + 2):(2 * (K + 1)), 1:no_params_ref] <- jacobian_ref
   # Jacobian of the treatment group with respect to the slowing parameter.
   jacobian[(K + 2):(2 * (K + 1)), no_params_ref + 1] <- ref_d(times, ref = ref, params, ...) * times
-  
+
   jacobian
 }
 
@@ -199,7 +199,7 @@ jacobian_slowing_multiple_outcomes <- function(J,
     sum()
 
   jacobian_blocks <- purrr::map2(times, params_list, function(outcome_times, outcome_params) {
-    do.call(jacobian_slowing_single_outcome,
+    do.call(jacobian_slowing_single_outcome_temp,
               list(
                 K = length(outcome_times) - 1,
                 times = outcome_times,
@@ -275,7 +275,7 @@ jacobian_slowing_multiple_outcomes_shared <- function(J,
   )
 
   jacobian_blocks <- purrr::map2(times, params_list, function(outcome_times, outcome_params) {
-    do.call(jacobian_slowing_single_outcome, list(
+    do.call(jacobian_slowing_single_outcome_temp, list(
       K = length(outcome_times) - 1,
       times = outcome_times,
       ref = ref,
@@ -484,7 +484,7 @@ time_d_4PL <- function(times, params) {
   
   exp_term <- exp(-slope * (times - inflection))
   denom <- (1 + exp_term)^2
-  - slope * exp_term / denom
+  slope * exp_term / denom
 }
 
 function_4PL <- function(times, params) {

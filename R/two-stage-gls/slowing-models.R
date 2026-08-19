@@ -100,10 +100,7 @@ make_slowing_models <- function(times, ref, type) {
 }
 
 jacobian_slowing_single_outcome <- function(times, ref_d, jacobian_ref, gamma0, gamma1, time_mapping, time_mapping_deriv){
-  
-  
-  
-  
+
   control_jacobian = cbind(jacobian_ref(times, gamma0),
                            matrix(0, nrow = length(times), ncol = length(gamma1)))
   exp_jacobian = cbind(

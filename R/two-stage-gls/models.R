@@ -67,7 +67,15 @@ jacobian_fn_treatment_null_constructor <- function(jacobian_fn, nuisance_params_
   }
 }
 
-model <- function(mean_fn, jacobian_fn, nuisance_params_position, treatment_params_null) {
+model <- function(mean_fn, jacobian_fn = NULL, nuisance_params_position, treatment_params_null) {
+  # If the Jacobian function is not provided, we approximate it using numerical
+  # differentiation.
+  if (is.null(jacobian_fn)) {
+    jacobian_fn <- function(gamma) {
+      numDeriv::jacobian(func = mean_fn, x = gamma)
+    }
+  }
+  
   new_model(
     list(
       mean_fn = mean_fn,
