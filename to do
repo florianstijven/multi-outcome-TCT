@@ -9,12 +9,12 @@ GLS is performed separately.
   - Relatedly, we could add "outcome strata" and "treatment strata" for plotting. 
   If we have the fitted parameters, model, m_tilde, and Sigma, we can easily 
   construct a GoF plot with SEs for the true means. 
+  - We could also fit using least squares, this is not optimal but could be more stable.
   
 * Add more features for building models for small building blocks?
   - I don't know which features beyond concatenation and shared parameters could be useful though.
   
 * improve documentation
 
-* Implement numerical computation of Jacobians?
 
 

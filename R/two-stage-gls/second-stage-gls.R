@@ -48,7 +48,7 @@ gls_criterion <- function(gamma, mean_fn, m_tilde, Sigma_inv) {
 #'  - `gamma_hat`: Estimated parameters (vector).
 #'  - `criterion`: Value of the GLS criterion function at the optimum.
 #'  - `optim`: Raw output from the `optim()` function.
-fit_gls <- function(m_tilde, Sigma, mean_fn, jac_mean_fn, start, method = "BFGS") {
+fit_gls <- function(m_tilde, Sigma, mean_fn, jac_mean_fn, start, method = "L-BFGS-B") {
   Sigma_inv <- solve(Sigma)
   gls_gradient <- function(gamma, ...) {
     mu_hat <- mean_fn(gamma)
@@ -191,7 +191,12 @@ fit_gls_split_gamma_hat <- function(gamma_hat, null_model, working_model) {
 #'   parameters for each outcome.
 #'  - `criterion`: Value of the GLS criterion function at the optimum.
 #'  - `optim`: Raw output from the `optim()` function.
-two_stage_gls_null <- function(m_tilde, Sigma, working_model, start) {
+two_stage_gls_null <- function(m_tilde,
+                               Sigma,
+                               working_model,
+                               start,
+                               treatment_strata = NULL,
+                               outcome_strata = NULL) {
   if (!inherits(working_model, "model")) {
     stop("Object is not of class 'model'.")
   } else {
@@ -216,6 +221,14 @@ two_stage_gls_null <- function(m_tilde, Sigma, working_model, start) {
   )
   
   list(
+    data = list(
+      m_tilde = m_tilde,
+      Sigma = Sigma,
+      treatment_strata = treatment_strata,
+      outcome_strata = outcome_strata
+    ),
+    null_model = TRUE,
+    working_model = working_model,
     gamma_hat = gls_fitted$gamma_hat,
     criterion  = gls_fitted$criterion,
     optim      = gls_fitted$optim
@@ -224,7 +237,7 @@ two_stage_gls_null <- function(m_tilde, Sigma, working_model, start) {
 
 
 #' @rdname two_stage_gls_null 
-two_stage_gls_full <- function(m_tilde, Sigma, working_model, start) {
+two_stage_gls_full <- function(m_tilde, Sigma, working_model, start, treatment_strata = NULL, outcome_strata = NULL) {
   
   # Fit the GLS model under the full model
   gls_fitted <- fit_gls(
@@ -235,11 +248,68 @@ two_stage_gls_full <- function(m_tilde, Sigma, working_model, start) {
   )
   
   list(
+    data = list(
+      m_tilde = m_tilde,
+      Sigma = Sigma,
+      treatment_strata = treatment_strata,
+      outcome_strata = outcome_strata
+    ),
+    null_model = FALSE,
+    working_model = working_model,
     gamma_hat = gls_fitted$gamma_hat,
     criterion  = gls_fitted$criterion,
     optim      = gls_fitted$optim
   )
 }
+
+
+plot_gls_fitted <- function(gls_fitted, treatment_strata = NULL, outcome_strata = NULL, times = NULL) {
+  # Create a data frame for plotting.
+  df_gls_fitted_predictions <- df_gls_fitted(gls_fitted, treatment_strata, outcome_strata, times)
+  
+  # Check whether ggplot2 is installed
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("The 'ggplot2' package is required for plotting. Please install it using install.packages('ggplot2').")
+  }
+  
+  ggplot2::ggplot(df_gls_fitted_predictions, ggplot2::aes(x = time_points, y = fitted_value)) +
+    ggplot2::geom_line(ggplot2::aes(color = as.factor(treatment_strata)), size = 1) +
+    ggplot2::geom_point(ggplot2::aes(y = first_stage_estimate, color = treatment_strata), size = 2) +
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = first_stage_estimate - SE_first_stage_estimate,
+                                        ymax = first_stage_estimate + SE_first_stage_estimate,
+                                        color = treatment_strata), width = 0.1) +
+    ggplot2::facet_wrap(~ outcome_strata, scales = "free_y") +
+    ggplot2::labs(x = "Time Points", y = "Fitted Value / First Stage Estimate",
+                  title = "GLS Fitted Values and First Stage Estimates") +
+    ggplot2::theme_minimal()
+}
+
+df_gls_fitted <- function(gls_fitted, treatment_strata = NULL, outcome_strata = NULL, times = NULL) {
+  # Create a data frame for plotting with the following columns: fitted value,
+  # first stage estimate, treatment strata, outcome strata, time points, and SEs
+  # for the first stage estimates.
+  if (gls_fitted$null_model) {
+    prediction_f <- gls_fitted$working_model$mean_fn_null
+  } else {
+    prediction_f <- gls_fitted$working_model$mean_fn
+  }
+  
+  data.frame(
+    fitted_value = prediction_f(gls_fitted$gamma_hat),
+    first_stage_estimate = gls_fitted$data$m_tilde,
+    treatment_strata = treatment_strata,
+    outcome_strata = outcome_strata,
+    time_points = times,
+    SE_first_stage_estimate = sqrt(diag(gls_fitted$data$Sigma))
+  )
+  
+  
+}
+
+
+treatment_strata <- rep(c(rep("control", 5), rep("treatment", 5)), 3)
+outcome_strata <- rep(c("outcome1", "outcome2", "outcome3"), each = 10)
+times <- rep(0:4, 6)
 
 
 
