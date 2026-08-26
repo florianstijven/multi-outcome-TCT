@@ -195,8 +195,10 @@ two_stage_gls_null <- function(m_tilde,
                                Sigma,
                                working_model,
                                start,
-                               treatment_strata = NULL,
-                               outcome_strata = NULL) {
+                               ols = FALSE,
+                               split_indices_mu = NULL,
+                               split_indices_params = NULL,
+                               split_indices_params_null = NULL) {
   if (!inherits(working_model, "model")) {
     stop("Object is not of class 'model'.")
   } else {
@@ -211,27 +213,59 @@ two_stage_gls_null <- function(m_tilde,
     ))
   }
   
-  # Fit the GLS model under the null
-  gls_fitted <- fit_gls(
-    m_tilde = m_tilde,
-    Sigma = Sigma,
-    mean_fn = working_model$mean_fn_null,
-    jac_mean_fn = working_model$jacobian_fn_null,
-    start = start
+  # OLS is equivalent to GLS with an identity covariance matrix. If ols = TRUE,
+  # we replace Sigma with an identity matrix.
+  if (ols) {
+    Sigma_new <- diag(1, nrow = length(m_tilde))
+  } else{
+    Sigma_new <- Sigma
+  }
+  
+  if (is.null(split_indices_mu)) {
+    # Fit the GLS model under the null
+    split_indices_mu <- rep(1, length(m_tilde))
+    n_params <- length(working_model$nuisance_params_position) + length(working_model$treatment_params_null)
+    split_indices_params <- rep(1, n_params)
+  }
+  split_indices_params_null <- split_indices_params[working_model$nuisance_params_position]
+  
+  # Fit the GLS model by stratum.
+  unique_strata <- unique(split_indices_mu)
+  n_strata <- length(unique_strata)
+  
+  m_tilde_list <- rep(list(NULL), n_strata)
+  Sigma_list <- rep(list(NULL), n_strata)
+  start_list <- rep(list(NULL), n_strata)
+  for (i in seq_along(unique_strata)) {
+    m_tilde_list[[i]] <- m_tilde[split_indices_mu == unique_strata[i]]
+    Sigma_list[[i]] <- Sigma_new[split_indices_mu == unique_strata[i], split_indices_mu == unique_strata[i]]
+    start_list[[i]] <- start[split_indices_params_null == unique_strata[i]]
+  }
+  models_list <- split_model(
+    model = working_model,
+    split_indices_mu = split_indices_mu,
+    split_indices_params = split_indices_params
   )
   
+  gls_fitted_list <- lapply(seq_along(m_tilde_list), function(i) {
+    fit_gls(
+      m_tilde = m_tilde_list[[i]],
+      Sigma = Sigma_list[[i]],
+      mean_fn = models_list[[i]]$mean_fn_null,
+      jac_mean_fn = models_list[[i]]$jacobian_fn_null,
+      start = start_list[[i]]
+    )
+  })
+  
+  
+  
   list(
-    data = list(
-      m_tilde = m_tilde,
-      Sigma = Sigma,
-      treatment_strata = treatment_strata,
-      outcome_strata = outcome_strata
-    ),
+    data = list(m_tilde = m_tilde, Sigma = Sigma),
     null_model = TRUE,
     working_model = working_model,
-    gamma_hat = gls_fitted$gamma_hat,
-    criterion  = gls_fitted$criterion,
-    optim      = gls_fitted$optim
+    gamma_hat = purrr::map(gls_fitted_list, "gamma_hat") %>% unlist(),
+    criterion  = purrr::map(gls_fitted_list, "criterion") %>% unlist(),
+    optim      = purrr::map(gls_fitted_list, "optim")
   )
 }
 

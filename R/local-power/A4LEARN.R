@@ -638,7 +638,7 @@ ggsave(
 # Testing
 # ============================================================================
 
-times <- scenarios_tbl$times[[2]]
+times <- scenarios_tbl$times[[2]] / 240
 J <- scenarios_tbl$J[[2]]
 K <- scenarios_tbl$K[[2]]
 times <- rep(list(times), J)
@@ -646,8 +646,38 @@ times <- rep(list(times), J)
 proportional_slowing_model_4PL <- make_slowing_models(ref = "4PL", times = times, type = "proportional")
 gls_fitted_4PL <- two_stage_gls_null(
   m_tilde = scenarios_tbl$m_tilde[[2]],
-  Sigma = scenarios_tbl$Sigma[[2]] + diag(1e-2, nrow(scenarios_tbl$Sigma[[2]])),
+  Sigma = scenarios_tbl$Sigma[[2]],
   working_model = proportional_slowing_model_4PL,
-  start = rep(c(500, -0.5), J)
+  start = rep(c(1, 0.5), J),
+  ols = TRUE,
+  split_indices_params = rep(1:J, each = 3),
+  split_indices_mu = rep(1:J, each = 2 * (K + 1)),
+  split_indices_params_null = rep(1:J, each = 2)
 )
 plot_gls_fitted(gls_fitted_4PL, times = rep(unlist(times), 2), outcome_strata = rep(1:J, each = 2 * (K + 1)), treatment_strata = rep(rep(c("control", "active"), each = K + 1), J))
+
+proportional_slowing_model_NC <- make_slowing_models(ref = "nc_spline", times = times, type = "proportional")
+gls_fitted_NC <- two_stage_gls_null(
+  m_tilde = scenarios_tbl$m_tilde[[1]],
+  Sigma = scenarios_tbl$Sigma[[1]],
+  working_model = proportional_slowing_model_NC,
+  start = rep(rep(0, K + 1), J),
+  ols = TRUE,
+  split_indices_params = rep(1:J, each = K + 2),
+  split_indices_mu = rep(1:J, each = 2 * (K + 1)),
+  split_indices_params_null = rep(1:J, each = K + 1)
+)
+plot_gls_fitted(
+  gls_fitted_NC,
+  times = rep(unlist(times), 2),
+  outcome_strata = rep(1:J, each = 2 * (K + 1)),
+  treatment_strata = rep(rep(c("control", "active"), each = K + 1), J)
+)
+
+
+
+
+
+
+
+

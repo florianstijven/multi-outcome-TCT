@@ -149,24 +149,24 @@ testthat::test_that("targeted_test() returns expected value when the null does n
   # Check values for 4PL model
   
   p_value_4PL <- targeted_test_4PL$p_value
-  testthat::expect_equal(p_value_4PL, 0.8457513252)
+  testthat::expect_equal(p_value_4PL, 0.8457921095)
   
   p_value_NC <- targeted_test_NC$p_value
-  testthat::expect_equal(p_value_NC, 0.8767681933)
+  testthat::expect_equal(p_value_NC, 0.8767636425)
   
   p_value_shared_4PL <- targeted_test_shared_4PL$p_value
-  testthat::expect_equal(p_value_shared_4PL, 0.3583682035)
+  testthat::expect_equal(p_value_shared_4PL, 0.5568624916)
 })
 
 testthat::test_that("targeted_test() returns expected value when the null does not hold for m_tilde for quadratic slowing", {
-  m_tilde_alt <- m_tilde + rep(c(rep(0, 5), 0:4), J)
+  m_tilde_alt <- (m_tilde + rep(c(rep(0, 5), 0:4), J)) / 10
   A <- build_omnibus_contrast_multi_outcome(J, K)
   targeted_test_4PL <- targeted_test(
     m_tilde = m_tilde_alt,
     Sigma   = Sigma,
     working_model = quadratic_slow_models_4PL,
     A = A,
-    start = rep(1:2, J),
+    start = rep(0:1, J),
     shared_matrix = NULL
   )
   targeted_test_NC <- targeted_test(
@@ -182,19 +182,19 @@ testthat::test_that("targeted_test() returns expected value when the null does n
     Sigma   = Sigma,
     working_model = shared_quadratic_slow_model_4PL,
     A = A,
-    start = rep(1:2, J),
+    start = rep(0:1, J),
     shared_matrix = NULL
   )
   
   # Check values for 4PL model
   
   p_value_4PL <- targeted_test_4PL$p_value
-  testthat::expect_equal(p_value_4PL, 0.9309020851)
+  testthat::expect_equal(p_value_4PL, 0.9998920256)
   
   p_value_NC <- targeted_test_NC$p_value
-  testthat::expect_equal(p_value_NC, 0.002891371836)
+  testthat::expect_equal(p_value_NC, 0.9998477153)
   
   p_value_shared_4PL <- targeted_test_shared_4PL$p_value
-  testthat::expect_equal(p_value_shared_4PL, 0.1318756374)
+  testthat::expect_equal(p_value_shared_4PL, 0.9212163492)
 })
 

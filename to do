@@ -16,5 +16,10 @@ GLS is performed separately.
   
 * improve documentation
 
+* Fix problems with fitting 4PL
+  - treat asymptotes as parameters?
+  - Problem was different scaling of inflection vs slope. Treating asymptotes as 
+  parameters could still be useful though.
 
+* Determine the weights each outcome and time point receive in the contrast
 
