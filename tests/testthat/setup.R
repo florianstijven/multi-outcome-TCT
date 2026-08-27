@@ -1,14 +1,5 @@
 library(magrittr)
 
-helper_file <- file.path("R", "local-power", "helper-functions-local-power.R")
-if (!file.exists(helper_file)) {
-	helper_file <- file.path("..", "..", "R", "local-power", "helper-functions-local-power.R")
-}
+list.files(path = file.path("..", "..", "R", "helper-functions"), pattern = "\\.R$", full.names = TRUE) %>%
+  lapply(source, echo = FALSE)
 
-source(helper_file)
-
-# gls_file <- file.path("R", "local-power", "second-stage-gls.R")
-# if (!file.exists(gls_file)) {
-#   gls_file <- file.path("..", "..", "R", "local-power", "second-stage-gls.R")
-# }
-# source(gls_file)

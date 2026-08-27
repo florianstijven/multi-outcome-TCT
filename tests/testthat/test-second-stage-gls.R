@@ -1,13 +1,3 @@
-helper_file2 <- file.path("..", "..", "R", "two-stage-gls", "second-stage-gls.R")
-helper_file3 <- file.path("..", "..","R", "local-power", "helper-functions-local-power.R")
-helper_file4 <- file.path("..", "..","R", "two-stage-gls", "models.R")
-helper_file5 <- file.path("..", "..","R", "two-stage-gls", "slowing-models.R")
-
-
-source(helper_file2)
-source(helper_file3)
-source(helper_file4)
-source(helper_file5)
 # ============================================================================
 # Shared fixtures used across multiple tests
 # ============================================================================
