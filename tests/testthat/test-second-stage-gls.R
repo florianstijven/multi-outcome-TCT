@@ -10,6 +10,7 @@ m_tilde <- rep(0:K, J * 2)
 Sigma <- build_kronecker_covariance(K = K, J = J)$Sigma
 
 prop_slow_models_4PL <- make_slowing_models(ref = "4PL", times = times_equal, type = "proportional")
+prop_slow_models_4PL_asympt <- make_slowing_models(ref = "4PL_asympt", times = times_equal, type = "proportional")
 prop_slow_models_NC <- make_slowing_models(ref = "nc_spline", times = times_equal, type = "proportional")
 
 shared_quadratic_slow_model_4PL <- shared_parameter_model(
@@ -162,6 +163,23 @@ testthat::test_that("two_stage_gls_null() works for 4PL and NC spline with OLS f
   testthat::expect_equal(
     purrr::map_dbl(gls_fitted_4PL$optim, "value"),
     c(84.00000203)
+  )
+})
+
+testthat::test_that("two_stage_gls_null() works for 4PL with asymptotes as parameters", {
+  gls_fitted_4PL_asympt <- two_stage_gls_null(
+    m_tilde = m_tilde,
+    Sigma   = Sigma,
+    working_model = prop_slow_models_4PL_asympt,
+    start = rep(c(1:2, 5, 0), J),
+    ols = TRUE
+  )
+  
+  # For the 4PL model, the minimized values should be equal some pre-computed
+  # values.
+  testthat::expect_equal(
+    purrr::map_dbl(gls_fitted_4PL_asympt$optim, "value"),
+    c(0.8909656715)
   )
 })
 

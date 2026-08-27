@@ -1,5 +1,9 @@
+# Packages ----
+
 library(tidyverse)
 library(A4LEARN)
+
+# A4LEARN Data ----
 
 # For now, we will based the DGM on the complete cases in the A4LEARN study.
 # This should be changed later.
@@ -37,6 +41,8 @@ clinical_data <- clinical_data %>%
   )) %>%
   mutate(weeks_since_randomization = pmax(0, weeks_since_randomization))
 
+## MMSE --------
+
 # Data set with MMSE subitem scores.
 MMSE_tbl = A4LEARN::mmse %>%
   pivot_longer(cols = c(8:20, 28:39),
@@ -65,15 +71,12 @@ MMSE_tbl <- MMSE_tbl %>%
 
 # Remove subjects that don't have complete data for all MMSE subitems for all
 # time points.
-time_points <- sort(unique(MMSE_tbl$weeks_since_randomization))
+time_points_MMSE <- sort(unique(MMSE_tbl$weeks_since_randomization))
 MMSE_tbl_complete_cases <- MMSE_tbl %>%
   group_by(BID) %>%
-  filter(all(time_points %in% weeks_since_randomization) &
+  filter(all(time_points_MMSE %in% weeks_since_randomization) &
            all(!is.na(score))) %>%
   ungroup()
-data_set %>%
-  group_by(weeks_since_randomization) %>%
-  summarise(n(), sum(is.na(score)))
 
 MMSE_tbl_complete_cases_control <- MMSE_tbl_complete_cases %>%
   filter(TX == "Placebo")
@@ -108,32 +111,107 @@ MMSE_summary_tbl %>%
   ylab("Mean Score") +
   theme(legend.position = "bottom")
 
+## CDR-SB -----------
+
+# Data set with CDRSB subitem scores.
+CDRSB_tbl = A4LEARN::cdr %>%
+  pivot_longer(cols = c(10:17),
+               names_to = "item",
+               values_to = "score") %>%
+  left_join(
+    clinical_data %>% select(BID, VISITCD, weeks_since_randomization, TX, ADURW) %>%
+      group_by(BID, VISITCD) %>%
+      slice_head() %>%
+      mutate(VISCODE = as.double(VISITCD)),
+    by = c("BID", "VISCODE")
+  ) %>%
+  filter(!is.na(TX))
+
+problematic_items_CDRSB <- c("CDGLOBAL", "CDSOB")
+
+# Exclude the problematic items from the CDRSB data set.
+CDRSB_tbl <- CDRSB_tbl %>%
+  filter(!item %in% problematic_items_CDRSB)
+
+# Remove subjects that don't have complete data for all MMSE subitems for all
+# time points.
+time_points_CDRSB <- sort(unique(CDRSB_tbl$weeks_since_randomization))
+CDRSB_tbl_complete_cases <- CDRSB_tbl %>%
+  group_by(BID) %>%
+  filter(all(time_points_CDRSB %in% weeks_since_randomization) &
+           all(!is.na(score))) %>%
+  ungroup()
+
+CDRSB_tbl_complete_cases_control <- CDRSB_tbl_complete_cases %>%
+  filter(TX == "Placebo")
+
+
+CDRSB_summary_tbl <- CDRSB_tbl_complete_cases %>%
+  group_by(item, TX, weeks_since_randomization) %>%
+  summarise(
+    mean_score = mean(score, na.rm = TRUE),
+    sd_score = sd(score, na.rm = TRUE),
+    n = n(),
+    se_score = sd_score / sqrt(n)
+  ) %>%
+  ungroup()
+
+
+
+CDRSB_summary_tbl %>%
+  filter(weeks_since_randomization >= 0) %>%
+  ggplot(aes(x = weeks_since_randomization, y = mean_score, color = TX)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(
+    ymin = mean_score - 1.96 * se_score,
+    ymax = mean_score + 1.96 * se_score
+  ),
+  width = 0.2) +
+  facet_wrap(. ~ item) +
+  xlab("Weeks since Randomization") +
+  ylab("Mean Score") +
+  theme(legend.position = "bottom")
+
+# Helper Functions ---------
+
 # Function that samples iid observations from the A4LEARN empirical distribution
 # in the placebo arm.
 sample_A4LEARN_control <- function(endpoint) {
-  if (!(endpoint %in% c("ADAS-Cog", "MMSE"))) {
+  if (!(endpoint %in% c("CDR-SB", "MMSE"))) {
     stop("Unknown endpoint: ", endpoint)
   }
   
-  sampled_ids <- sample(
-    unique(MMSE_tbl_complete_cases_control$BID),
-    size = length(unique(MMSE_tbl_complete_cases_control$BID)),
-    replace = TRUE
-  )
-  
-  purrr::map2(.x = sampled_ids, .y = seq_along(sampled_ids), function(id, new_id) {
-    MMSE_tbl_complete_cases_control %>%
-      filter(BID == id) %>%
-      mutate(BID = new_id)
-  }) %>%
-    list_rbind()
+  if (endpoint == "CDR-SB") {
+    sampled_ids <- sample(
+      unique(CDRSB_tbl_complete_cases_control$BID),
+      size = length(unique(CDRSB_tbl_complete_cases_control$BID)),
+      replace = TRUE
+    )
+    
+    purrr::map2(.x = sampled_ids, .y = seq_along(sampled_ids), function(id, new_id) {
+      CDRSB_tbl_complete_cases_control %>%
+        filter(BID == id) %>%
+        mutate(BID = new_id)
+    }) %>%
+      list_rbind()
+  } else if (endpoint == "MMSE") {
+    sampled_ids <- sample(
+      unique(MMSE_tbl_complete_cases_control$BID),
+      size = length(unique(MMSE_tbl_complete_cases_control$BID)),
+      replace = TRUE
+    )
+    
+    purrr::map2(.x = sampled_ids, .y = seq_along(sampled_ids), function(id, new_id) {
+      MMSE_tbl_complete_cases_control %>%
+        filter(BID == id) %>%
+        mutate(BID = new_id)
+    }) %>%
+      list_rbind()
+  }
 }
 
 sample_A4LEARN_null <- function(endpoint) {
-  if (!(endpoint %in% c("ADAS-Cog", "MMSE"))) {
-    stop("Unknown endpoint: ", endpoint)
-  }
-  
   bind_rows(
     sample_A4LEARN_control(endpoint) %>%
       mutate(TX = "Placebo"),
@@ -142,6 +220,7 @@ sample_A4LEARN_null <- function(endpoint) {
 }
 
 data_set <- sample_A4LEARN_null("MMSE")
+data_set <- sample_A4LEARN_null("CDR-SB")
 
 analyze_A4LEARN <- function(data_set) {
   times <- data_set %>%
@@ -172,7 +251,7 @@ analyze_A4LEARN <- function(data_set) {
   
   m_tilde <- m_tilde %>% t()
   
-  Sigma <- data_set %>%
+  data_set_wide_cc <- data_set %>%
     group_by(BID) %>%
     filter(all(!is.na(score))) %>%
     ungroup() %>%
@@ -193,8 +272,12 @@ analyze_A4LEARN <- function(data_set) {
       names_glue = "{.value}_WEEK_{weeks_since_randomization}_{TX}"
     ) %>%
     select(contains("WEEK_")) %>%
-    select(rownames(m_tilde)) %>%
+    select(rownames(m_tilde))
+  
+  Sigma <- data_set_wide_cc %>%
     cov(use = "pair")
+  
+  n_cc <- nrow(data_set_wide_cc)
   
   # 50% of the covariance values should be NA, not more.
   if (mean(is.na(Sigma)) != 0.5) {
@@ -212,7 +295,9 @@ analyze_A4LEARN <- function(data_set) {
   return(list(
     times = times,
     m_tilde = m_tilde,
-    Sigma = Sigma
+    Sigma = Sigma,
+    n = n_cc,
+    Sigma_n = 2 * Sigma / n_cc
   ))
 }
 
@@ -257,31 +342,117 @@ outcome_dependent_prop_slowing_gamma1_f <- function(gamma0_list, shared_slowing_
   return(params)
 }
 
+# Simulations ---------
 
+## MMSE -------------
 
 K  <- MMSE_summary_tbl$weeks_since_randomization %>% unique() %>% length() - 1
 J  <- MMSE_summary_tbl$item %>% unique() %>% length()
 
-times_list <- rep(list(MMSE_summary_tbl$weeks_since_randomization %>% unique()), J)
+times_list <- rep(times_MMSE / 240), J)
 
 prop_slow_models_4PL <- make_slowing_models(ref = "4PL", times = times_list, type = "proportional")
 prop_slow_models_NC <- make_slowing_models(ref = "nc_spline", times = times_list, type = "proportional")
 
+shared_prop_slow_models_4PL <- shared_parameter_model(
+  model = prop_slow_models_4PL,
+  shared_param_positions = list((1:J) * 3)
+)
+
 compute_treatment_shift(model = prop_slow_models_4PL, params = c(1, 0.1, 1e3, 1, 1, 1, 1, 1, 1), times = times_equal)
 
-n_MC <- 10
+n_MC <- 30
+p_values <- numeric(n_MC)
+p_values_summing <- numeric(n_MC)
 
 for (i in 1:n_MC) {
   data_set <- sample_A4LEARN_null("MMSE")
   analysis_results <- analyze_A4LEARN(data_set)
-  targeted_test(
+  p_values[i] <- targeted_test(
     m_tilde = analysis_results$m_tilde,
-    Sigma   = analysis_results$Sigma + 1e-6 * diag(nrow(analysis_results$Sigma)),
-    working_model = prop_slow_models_NC,
+    Sigma   = analysis_results$Sigma_n,
+    working_model = shared_prop_slow_models_4PL,
     A = build_omnibus_contrast_multi_outcome(J, K),
-    start = rep((K:0) / K, J),
-    shared_matrix = NULL
-  )
+    ols = TRUE,
+    start = rep(c(5, 0.1), J)
+  )$p_value
+  p_values_summing[i] <- targeted_test_statistic(
+    B = build_summing_contrast_multi_outcome(J, K),
+    m_tilde = analysis_results$m_tilde,
+    Sigma = analysis_results$Sigma_n
+  )$p_value
 }
-analyze_A4LEARN(sample_A4LEARN_null("MMSE"))
 
+hist(p_values, main = "Histogram of p-values from targeted test", xlab = "p-value")
+hist(unlist(p_values_summing), main = "Histogram of p-values from omnibus test", xlab = "p-value")
+
+
+## CDR-SB -------------
+
+
+K  <- CDRSB_summary_tbl$weeks_since_randomization %>% unique() %>% length() - 1
+J  <- CDRSB_summary_tbl$item %>% unique() %>% length()
+
+times_list <- rep(list(time_points_CDRSB / 240), J)
+
+prop_slow_models_4PL <- make_slowing_models(ref = "4PL", times = times_list, type = "proportional")
+prop_slow_models_NC <- make_slowing_models(ref = "nc_spline", times = times_list, type = "proportional")
+
+shared_prop_slow_models_4PL <- shared_parameter_model(model = prop_slow_models_4PL, shared_param_positions = list((1:J) * 3))
+
+n_MC <- 100
+p_values <- numeric(n_MC)
+p_values_summing <- numeric(n_MC)
+
+CDRSB_tbl_temp <- bind_rows(
+  CDRSB_tbl_complete_cases_control %>%
+    mutate(TX = "Placebo"),
+  CDRSB_tbl_complete_cases_control %>% 
+    mutate(TX = "Experimental", BID = paste0(BID, "A"))
+)
+analysis_results_temp <- analyze_A4LEARN(CDRSB_tbl_temp)
+
+gls_fitted <- two_stage_gls_null(
+  m_tilde = analysis_results_temp$m_tilde,
+  Sigma   = analysis_results_temp$Sigma_n,
+  working_model = shared_prop_slow_models_4PL,
+  ols = TRUE,
+  start = rep(c(2, 1), J)
+)
+plot_gls_fitted(
+  gls_fitted = gls_fitted, 
+  treatment_strata = rep(c(rep(1, K + 1), rep(2, K + 1)), J) %>% as.factor(), 
+  outcome_strata = rep(1:J, each = 2 * (K + 1)) %>% as.factor(),
+  times = rep(unlist(times_list), 2)
+)
+
+slowing_factor <- 1
+
+Delta <- compute_treatment_shift(
+  model = shared_prop_slow_models_4PL,
+  params = c(gls_fitted$gamma_hat, slowing_factor),
+  times = times_list
+)
+
+for (i in 1:n_MC) {
+  data_set <- sample_A4LEARN_null("CDR-SB")
+  analysis_results <- analyze_A4LEARN(data_set)
+  p_values[i] <- targeted_test(
+    m_tilde = analysis_results$m_tilde + Delta,
+    Sigma   = analysis_results$Sigma_n,
+    working_model = shared_prop_slow_models_4PL,
+    A = build_omnibus_contrast_multi_outcome(J, K),
+    ols = TRUE,
+    start = rep(c(2, 1), J)
+  )$p_value
+  p_values_summing[i] <- targeted_test_statistic(
+    B = build_summing_contrast_multi_outcome(J, K),
+    m_tilde = analysis_results$m_tilde + Delta,
+    Sigma = analysis_results$Sigma_n
+  )$p_value
+}
+
+hist(p_values, main = "Histogram of p-values from targeted test", xlab = "p-value")
+hist(p_values_summing, main = "Histogram of p-values from sum test", xlab = "p-value")
+mean(p_values <= 0.05)
+mean(p_values_summing <= 0.05)

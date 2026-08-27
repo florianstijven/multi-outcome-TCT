@@ -193,7 +193,8 @@ problematic_items_CDRSB <- c("CARE")
 # Local Power
 # ============================================================================
 
-source("R/local-power/helper-functions-local-power.R")
+list.files(path = file.path("R", "helper-functions"), pattern = "\\.R$", full.names = TRUE) %>%
+  lapply(source, echo = FALSE)
 
 # Function to extract the time points, mean vector, and covariance matrix for a
 # given outcome.
@@ -655,14 +656,14 @@ times <- rep(list(times), J)
 Sigma_n <- scenarios_tbl$Sigma[[outcome_id]] / scenarios_tbl$n[[outcome_id]]
 m_tilde <- scenarios_tbl$m_tilde[[outcome_id]]
 
-proportional_slowing_model_4PL <- make_slowing_models(ref = "4PL", times = times, type = "proportional")
+proportional_slowing_model_4PL <- make_slowing_models(ref = "4PL_asympt", times = times, type = "proportional")
 gls_fitted_4PL <- two_stage_gls_null(
   m_tilde = m_tilde,
   Sigma = Sigma_n,
   working_model = proportional_slowing_model_4PL,
-  start = rep(c(10, -0.2), J),
+  start = rep(c(5, 1.5, 3, -1), J),
   ols = TRUE,
-  split_indices_params = rep(1:J, each = 3),
+  split_indices_params = rep(1:J, each = 5),
   split_indices_mu = rep(1:J, each = 2 * (K + 1))
 )
 plot_gls_fitted(gls_fitted_4PL, times = rep(unlist(times), 2), outcome_strata = rep(1:J, each = 2 * (K + 1)), treatment_strata = rep(rep(c("control", "active"), each = K + 1), J))

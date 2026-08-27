@@ -16,3 +16,8 @@
 
 * Determine the weights each outcome and time point receive in the contrast
 
+* Do some very prelim sims
+  - I should probably also implement a permutation test because type I error may be too inflatef
+  for realistic sample sizes?
+  - split up file for getting complete case data. No real helper functions
+  should be defined in main sim script.
