@@ -36,24 +36,36 @@
 #'  - `statistic`: The computed test statistic.
 #'  - `df`: The degrees of freedom for the test statistic.
 #'  - `p_value`: The p-value associated with the test statistic.
-targeted_test <- function(m_tilde, Sigma, working_model, A, shared_matrix, start) {
+targeted_test <- function(m_tilde,
+                          Sigma,
+                          working_model,
+                          A,
+                          # shared_matrix,
+                          start,
+                          ols = FALSE,
+                          split_indices_mu = NULL,
+                          split_indices_params = NULL
+) {
   # Step 1: Fit working model under the null.
   gls_fitted_null <- two_stage_gls_null(m_tilde = m_tilde,
                                         Sigma   = Sigma,
                                         working_model = working_model, 
-                                        start = start)
+                                        start = start,
+                                        ols = ols,
+                                        split_indices_mu = split_indices_mu,
+                                        split_indices_params = split_indices_params)
   
   # Step 2: build the Jacobian at the null estimate
   jacobian <- working_model$jacobian_fn_treatment_null(
     gamma0 = gls_fitted_null$gamma_hat
   )
   
-  # If parameters are shared across outcomes, we need to adjust the Jacobian to
-  # account for the shared structure.
-  if (is.null(shared_matrix)) {
-    shared_matrix <- diag(1, nrow = ncol(jacobian))
-  }
-  jacobian <- jacobian %*% shared_matrix
+  # # If parameters are shared across outcomes, we need to adjust the Jacobian to
+  # # account for the shared structure.
+  # if (is.null(shared_matrix)) {
+  #   shared_matrix <- diag(1, nrow = ncol(jacobian))
+  # }
+  # jacobian <- jacobian %*% shared_matrix
   
   B_n <- build_contrast_matrix(jacobian = jacobian,
                                A = A,

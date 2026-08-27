@@ -226,7 +226,7 @@ extract_information_local_power <- function(data_set) {
   
   m_tilde <- m_tilde %>% t()
   
-  Sigma <- data_set %>%
+  data_set_wide_cc <- data_set %>%
     group_by(BID) %>%
     filter(all(!is.na(score))) %>%
     ungroup() %>%
@@ -247,8 +247,13 @@ extract_information_local_power <- function(data_set) {
       names_glue = "{.value}_WEEK_{weeks_since_randomization}_{TX}"
     ) %>%
     select(contains("WEEK_")) %>%
-    select(rownames(m_tilde)) %>%
+    select(rownames(m_tilde))
+  
+  Sigma <- data_set_wide_cc %>%
     cov(use = "pair")
+  
+  # Number of complete cases used for computing Sigma.
+  n_cc <- nrow(data_set_wide_cc)
   
   # 50% of the covariance values should be NA, not more.
   if (mean(is.na(Sigma)) != 0.5) {
@@ -266,7 +271,8 @@ extract_information_local_power <- function(data_set) {
   return(list(
     times = times,
     m_tilde = m_tilde,
-    Sigma = Sigma
+    Sigma = Sigma,
+    n = n_cc
   ))
 }
 
@@ -483,6 +489,7 @@ scenarios_tbl <- scenarios_tbl %>%
       .f = function(inflection, slope)
         c(inflection = inflection, slope = slope)
     )),
+    n  = map_dbl(information, ~ .x$n),
     J = map_dbl(fourPL_fit, ~ nrow(.x)),
     K = map_dbl(times, ~ length(.x) - 1),
     A = list(build_omnibus_contrast_multi_outcome(J = J, K = K)),
@@ -638,34 +645,37 @@ ggsave(
 # Testing
 # ============================================================================
 
-times <- scenarios_tbl$times[[2]] / 240
-J <- scenarios_tbl$J[[2]]
-K <- scenarios_tbl$K[[2]]
+outcome_id <- 1
+
+times <- scenarios_tbl$times[[outcome_id]] / 240
+J <- scenarios_tbl$J[[outcome_id]]
+K <- scenarios_tbl$K[[outcome_id]]
 times <- rep(list(times), J)
+
+Sigma_n <- scenarios_tbl$Sigma[[outcome_id]] / scenarios_tbl$n[[outcome_id]]
+m_tilde <- scenarios_tbl$m_tilde[[outcome_id]]
 
 proportional_slowing_model_4PL <- make_slowing_models(ref = "4PL", times = times, type = "proportional")
 gls_fitted_4PL <- two_stage_gls_null(
-  m_tilde = scenarios_tbl$m_tilde[[2]],
-  Sigma = scenarios_tbl$Sigma[[2]],
+  m_tilde = m_tilde,
+  Sigma = Sigma_n,
   working_model = proportional_slowing_model_4PL,
-  start = rep(c(1, 0.5), J),
+  start = rep(c(10, -0.2), J),
   ols = TRUE,
   split_indices_params = rep(1:J, each = 3),
-  split_indices_mu = rep(1:J, each = 2 * (K + 1)),
-  split_indices_params_null = rep(1:J, each = 2)
+  split_indices_mu = rep(1:J, each = 2 * (K + 1))
 )
 plot_gls_fitted(gls_fitted_4PL, times = rep(unlist(times), 2), outcome_strata = rep(1:J, each = 2 * (K + 1)), treatment_strata = rep(rep(c("control", "active"), each = K + 1), J))
 
 proportional_slowing_model_NC <- make_slowing_models(ref = "nc_spline", times = times, type = "proportional")
 gls_fitted_NC <- two_stage_gls_null(
-  m_tilde = scenarios_tbl$m_tilde[[1]],
-  Sigma = scenarios_tbl$Sigma[[1]],
+  m_tilde = m_tilde,
+  Sigma = Sigma_n,
   working_model = proportional_slowing_model_NC,
   start = rep(rep(0, K + 1), J),
   ols = TRUE,
   split_indices_params = rep(1:J, each = K + 2),
-  split_indices_mu = rep(1:J, each = 2 * (K + 1)),
-  split_indices_params_null = rep(1:J, each = K + 1)
+  split_indices_mu = rep(1:J, each = 2 * (K + 1))
 )
 plot_gls_fitted(
   gls_fitted_NC,
@@ -673,6 +683,127 @@ plot_gls_fitted(
   outcome_strata = rep(1:J, each = 2 * (K + 1)),
   treatment_strata = rep(rep(c("control", "active"), each = K + 1), J)
 )
+
+targeted_test_statistic(
+  B = build_omnibus_contrast_multi_outcome(J, K),
+  m_tilde = m_tilde,
+  Sigma = Sigma_n
+)
+targeted_test_statistic(
+  B = build_summing_contrast_multi_outcome(J, K),
+  m_tilde = m_tilde,
+  Sigma = Sigma_n
+)
+
+
+
+test_result_4PL <- targeted_test(
+  m_tilde = m_tilde,
+  Sigma = Sigma_n,
+  working_model = proportional_slowing_model_4PL,
+  A = build_omnibus_contrast_multi_outcome(J, K),
+  start = rep(c(10, -0.2), J),
+  ols = TRUE,
+  split_indices_params = rep(1:J, each = 3),
+  split_indices_mu = rep(1:J, each = 2 * (K + 1))
+)
+
+shared_params_vec <- (1:J) * 3
+
+shared_proportional_slowing_model_4PL <- shared_parameter_model(proportional_slowing_model_4PL, shared_params_vec)
+
+test_result_4PL_shared <- targeted_test(
+  m_tilde = m_tilde,
+  Sigma = Sigma_n,
+  working_model = shared_proportional_slowing_model_4PL,
+  A = build_omnibus_contrast_multi_outcome(J, K),
+  start = rep(c(10, -0.2), J),
+  ols = TRUE
+)
+
+test_result_NC <- targeted_test(
+  m_tilde = m_tilde,
+  Sigma = Sigma_n,
+  working_model = proportional_slowing_model_NC,
+  A = build_omnibus_contrast_multi_outcome(J, K),
+  start = rep(rep(0, K + 1), J),
+  ols = FALSE,
+  split_indices_params = rep(1:J, each = K + 2),
+  split_indices_mu = rep(1:J, each = 2 * (K + 1))
+)
+
+test_result_NC
+
+
+shared_params_vec <- (1:J) * (K + 2)
+
+shared_proportional_slowing_model_NC <- shared_parameter_model(proportional_slowing_model_NC, shared_params_vec)
+
+test_result_NC_shared <- targeted_test(
+  m_tilde = m_tilde,
+  Sigma = Sigma_n,
+  working_model = shared_proportional_slowing_model_NC,
+  A = build_omnibus_contrast_multi_outcome(J, K),
+  start = rep(rep(0, K + 1), J),
+  ols = TRUE
+)
+
+Delta <- compute_treatment_shift(
+  model = shared_proportional_slowing_model_4PL,
+  params = c(test_result_4PL_shared$gls_fitted_null$gamma_hat, 0.60),
+  times = times
+)
+m_tilde_d <- m_tilde + Delta
+
+
+gls_fitted_4PL <- two_stage_gls_null(
+  m_tilde = m_tilde_d,
+  Sigma = Sigma_n,
+  working_model = proportional_slowing_model_4PL,
+  start = rep(c(10, -0.2), J),
+  ols = TRUE,
+  split_indices_params = rep(1:J, each = 3),
+  split_indices_mu = rep(1:J, each = 2 * (K + 1))
+)
+plot_gls_fitted(gls_fitted_4PL, times = rep(unlist(times), 2), outcome_strata = rep(1:J, each = 2 * (K + 1)), treatment_strata = rep(rep(c("control", "active"), each = K + 1), J))
+
+gls_fitted_NC <- two_stage_gls_null(
+  m_tilde = m_tilde_d,
+  Sigma = Sigma_n,
+  working_model = proportional_slowing_model_NC,
+  start = rep(rep(0, K + 1), J),
+  ols = TRUE,
+  split_indices_params = rep(1:J, each = K + 2),
+  split_indices_mu = rep(1:J, each = 2 * (K + 1))
+)
+plot_gls_fitted(
+  gls_fitted_NC,
+  times = rep(unlist(times), 2),
+  outcome_strata = rep(1:J, each = 2 * (K + 1)),
+  treatment_strata = rep(rep(c("control", "active"), each = K + 1), J)
+)
+
+
+targeted_test(
+  m_tilde = m_tilde_d,
+  Sigma = Sigma_n,
+  working_model = shared_proportional_slowing_model_4PL,
+  A = build_omnibus_contrast_multi_outcome(J, K),
+  start = rep(c(10, -0.2), J),
+  ols = TRUE
+)
+
+targeted_test_statistic(
+  B = build_summing_contrast_multi_outcome(J, K),
+  m_tilde = m_tilde_d,
+  Sigma = Sigma_n
+)
+
+
+
+
+
+
 
 
 

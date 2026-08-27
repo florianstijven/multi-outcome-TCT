@@ -83,7 +83,7 @@ testthat::test_that("two_stage_gls_null() works for 4PL and NC spline", {
 })
 
 
-testthat::test_that("two_stage_gls_null() works for 4PL and NC spline with by outcome fitting and OLS", {
+testthat::test_that("two_stage_gls_null() works for 4PL and NC spline with by outcome fitting", {
   gls_fitted_4PL <- two_stage_gls_null(
     m_tilde = m_tilde,
     Sigma   = Sigma,
@@ -141,50 +141,38 @@ testthat::test_that("two_stage_gls_null() works for 4PL and NC spline with by ou
     purrr::map_dbl(gls_fitted_4PL_shared_quadratic$optim, "value"),
     c(3.529349807, 6.176362163, 3.529349807)
   )
-  
-  
-  
-  
-  
-  
+})
+
+
+testthat::test_that("two_stage_gls_null() works for 4PL and NC spline with OLS fitting", {
   gls_fitted_4PL <- two_stage_gls_null(
     m_tilde = m_tilde,
     Sigma   = Sigma,
     working_model = prop_slow_models_4PL,
-    start = rep(1:2, J)
+    start = rep(1:2, J),
+    ols = TRUE
   )
   
   gls_fitted_NC <- two_stage_gls_null(
     m_tilde = m_tilde,
     Sigma   = Sigma,
     working_model = prop_slow_models_NC,
-    start = rep(0:K, J)
+    start = rep(0:K, J),
+    ols = TRUE
   )
   
-  # Check values for 4PL model
-  
-  value <- gls_fitted_4PL$optim[[1]]$value
-  param1 <- gls_fitted_4PL$gamma_hat[1]
-  
+  # For the NC spline model, the minimized values should be equal to zero
+  # because m_tilde satisfies the null exactly.
   testthat::expect_equal(
-    value, 7.411634625
+    purrr::map_dbl(gls_fitted_NC$optim, "value"),
+    0
   )
+  # For the 4PL model, the minimized values should be equal some pre-computed
+  # values.
   testthat::expect_equal(
-    param1, c(0.9798581652)
+    purrr::map_dbl(gls_fitted_4PL$optim, "value"),
+    c(84.00000203)
   )
-  
-  # Check values for NC spline model
-  
-  value <- gls_fitted_NC$optim[[1]]$value
-  param1 <- gls_fitted_NC$gamma_hat[1]
-  
-  testthat::expect_equal(
-    value, 0
-  )
-  testthat::expect_equal(
-    param1, 1.000018456
-  )
-  
 })
 
 

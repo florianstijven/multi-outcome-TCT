@@ -178,12 +178,19 @@ fit_gls_split_gamma_hat <- function(gamma_hat, null_model, working_model) {
 #'
 #' [two_stage_gls_full()] fits a generalized least squares (GLS) model to the
 #' first-stage estimates. [two_stage_gls_null()] fits the same model under the
-#' null of no treatment effect. It constructs the mean function based on
-#' the provided slowing models, and then optimizes the GLS criterion function to
-#' estimate the reference-trajectory parameters (and slowing parameters for [two_stage_gls_full()]).
+#' null of no treatment effect. It constructs the mean function based on the
+#' provided slowing models, and then optimizes the GLS criterion function to
+#' estimate the reference-trajectory parameters (and slowing parameters for
+#' [two_stage_gls_full()]).
 #'
 #' @inheritParams fit_gls
 #' @inheritParams fit_gls_split_gamma_hat
+#' @param split_indices_mu integer vector where each element denotes the
+#'   stratum of the the corresponding element in `m_tilde`.
+#' @param split_indices_params list of integers where each element denotes the stratum of the
+#'   the corresponding parameter in parameter vector for `working_model`. The
+#'   list elements can have length greater than one, which may be required for
+#'   shared-parameter models.
 #'
 #' @returns (list) A list containing:
 #' - `gamma_hat`: Named vector of estimated parameters under the null.
@@ -197,8 +204,7 @@ two_stage_gls_null <- function(m_tilde,
                                start,
                                ols = FALSE,
                                split_indices_mu = NULL,
-                               split_indices_params = NULL,
-                               split_indices_params_null = NULL) {
+                               split_indices_params = NULL) {
   if (!inherits(working_model, "model")) {
     stop("Object is not of class 'model'.")
   } else {
@@ -309,8 +315,8 @@ plot_gls_fitted <- function(gls_fitted, treatment_strata = NULL, outcome_strata 
   ggplot2::ggplot(df_gls_fitted_predictions, ggplot2::aes(x = time_points, y = fitted_value)) +
     ggplot2::geom_line(ggplot2::aes(color = as.factor(treatment_strata)), size = 1) +
     ggplot2::geom_point(ggplot2::aes(y = first_stage_estimate, color = treatment_strata), size = 2) +
-    ggplot2::geom_errorbar(ggplot2::aes(ymin = first_stage_estimate - SE_first_stage_estimate,
-                                        ymax = first_stage_estimate + SE_first_stage_estimate,
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = first_stage_estimate - 1.96 * SE_first_stage_estimate,
+                                        ymax = first_stage_estimate + 1.96 * SE_first_stage_estimate,
                                         color = treatment_strata), width = 0.1) +
     ggplot2::facet_wrap(~ outcome_strata, scales = "free_y") +
     ggplot2::labs(x = "Time Points", y = "Fitted Value / First Stage Estimate",

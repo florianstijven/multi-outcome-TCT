@@ -41,24 +41,21 @@ testthat::test_that("targeted_test() returns expected value when the null holds 
     Sigma   = Sigma,
     working_model = prop_slow_models_4PL,
     A = A,
-    start = rep(1:2, J),
-    shared_matrix = NULL
+    start = rep(1:2, J)
   )
   targeted_test_NC <- targeted_test(
     m_tilde = m_tilde,
     Sigma   = Sigma,
     working_model = prop_slow_models_NC,
     A = A,
-    start = rep(0:K, J),
-    shared_matrix = NULL
+    start = rep(0:K, J)
   )
   targeted_test_shared_4PL <- targeted_test(
     m_tilde = m_tilde,
     Sigma   = Sigma,
     working_model = shared_slowing_model_4PL,
     A = A,
-    start = rep(1:2, J),
-    shared_matrix = NULL
+    start = rep(1:2, J)
   )
   
   # Check values for 4PL model
@@ -83,24 +80,21 @@ testthat::test_that("targeted_test() returns expected value when the null holds 
     Sigma   = Sigma,
     working_model = quadratic_slow_models_4PL,
     A = A,
-    start = rep(1:2, J),
-    shared_matrix = NULL
+    start = rep(1:2, J)
   )
   targeted_test_NC <- targeted_test(
     m_tilde = m_tilde,
     Sigma   = Sigma,
     working_model = quadratic_slow_models_NC,
     A = A,
-    start = rep(0:K, J),
-    shared_matrix = NULL
+    start = rep(0:K, J)
   )
   targeted_test_shared_4PL <- targeted_test(
     m_tilde = m_tilde,
     Sigma   = Sigma,
     working_model = shared_quadratic_slow_model_4PL,
     A = A,
-    start = rep(1:2, J),
-    shared_matrix = NULL
+    start = rep(1:2, J)
   )
   
   # Check values for 4PL model
@@ -126,24 +120,21 @@ testthat::test_that("targeted_test() returns expected value when the null does n
     Sigma   = Sigma,
     working_model = prop_slow_models_4PL,
     A = A,
-    start = rep(1:2, J),
-    shared_matrix = NULL
+    start = rep(1:2, J)
   )
   targeted_test_NC <- targeted_test(
     m_tilde = m_tilde_alt,
     Sigma   = Sigma,
     working_model = prop_slow_models_NC,
     A = A,
-    start = rep(0:K, J),
-    shared_matrix = NULL
+    start = rep(0:K, J)
   )
   targeted_test_shared_4PL <- targeted_test(
     m_tilde = m_tilde_alt,
     Sigma   = Sigma,
     working_model = shared_slowing_model_4PL,
     A = A,
-    start = rep(1:2, J),
-    shared_matrix = NULL
+    start = rep(1:2, J)
   )
   
   # Check values for 4PL model
@@ -166,24 +157,21 @@ testthat::test_that("targeted_test() returns expected value when the null does n
     Sigma   = Sigma,
     working_model = quadratic_slow_models_4PL,
     A = A,
-    start = rep(0:1, J),
-    shared_matrix = NULL
+    start = rep(0:1, J)
   )
   targeted_test_NC <- targeted_test(
     m_tilde = m_tilde_alt,
     Sigma   = Sigma,
     working_model = quadratic_slow_models_NC,
     A = A,
-    start = rep(0:K, J),
-    shared_matrix = NULL
+    start = rep(0:K, J)
   )
   targeted_test_shared_4PL <- targeted_test(
     m_tilde = m_tilde_alt,
     Sigma   = Sigma,
     working_model = shared_quadratic_slow_model_4PL,
     A = A,
-    start = rep(0:1, J),
-    shared_matrix = NULL
+    start = rep(0:1, J)
   )
   
   # Check values for 4PL model
