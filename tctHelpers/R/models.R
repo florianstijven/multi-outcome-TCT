@@ -1,3 +1,15 @@
+#' Finalize a working-model object
+#'
+#' Given a list with a mean function, Jacobian function, and information about
+#' which parameters are nuisance vs. treatment-effect parameters, computes the
+#' derived null/treatment mean and Jacobian functions and assigns the `model`
+#' class.
+#'
+#' @param x list with elements `mean_fn`, `jacobian_fn`,
+#'   `nuisance_params_position`, and `treatment_params_null`.
+#'
+#' @returns an object of class `model`.
+#' @export
 new_model <- function(x = list()) {
   stopifnot(is.list(x))
   
@@ -38,6 +50,17 @@ new_model <- function(x = list()) {
   )
 }
 
+#' Build the null mean function for a model
+#'
+#' @param mean_fn function, the full mean function.
+#' @param nuisance_params_position integer vector, positions of the nuisance
+#'   parameters in the full parameter vector.
+#' @param treatment_params_null numeric vector, the null values of the
+#'   treatment-effect parameters.
+#'
+#' @returns a function of `gamma0` (the nuisance parameters) returning the
+#'   mean vector at the null.
+#' @keywords internal
 mean_fn_null_constructor <- function(mean_fn, nuisance_params_position, treatment_params_null) {
   function(gamma0) {
     gamma <- numeric(length = length(nuisance_params_position) + length(treatment_params_null))
@@ -48,6 +71,14 @@ mean_fn_null_constructor <- function(mean_fn, nuisance_params_position, treatmen
   }
 }
 
+#' Build the null Jacobian function for a model
+#'
+#' @inheritParams mean_fn_null_constructor
+#' @param jacobian_fn function, the full Jacobian function.
+#'
+#' @returns a function of `gamma0` returning the Jacobian with respect to the
+#'   nuisance parameters, evaluated at the null.
+#' @keywords internal
 jacobian_fn_null_constructor <- function(jacobian_fn, nuisance_params_position, treatment_params_null) {
   function(gamma0) {
     gamma <- numeric(length = length(nuisance_params_position) + length(treatment_params_null))
@@ -60,6 +91,13 @@ jacobian_fn_null_constructor <- function(jacobian_fn, nuisance_params_position, 
   }
 }
 
+#' Build the treatment-effect Jacobian function at the null
+#'
+#' @inheritParams jacobian_fn_null_constructor
+#'
+#' @returns a function of `gamma0` returning the Jacobian with respect to the
+#'   treatment-effect parameters, evaluated at the null.
+#' @keywords internal
 jacobian_fn_treatment_null_constructor <- function(jacobian_fn, nuisance_params_position, treatment_params_null) {
   function(gamma0) {
     gamma <- numeric(length = length(nuisance_params_position) + length(treatment_params_null))
@@ -72,7 +110,23 @@ jacobian_fn_treatment_null_constructor <- function(jacobian_fn, nuisance_params_
   }
 }
 
-model <- function(mean_fn, jacobian_fn = NULL, nuisance_params_position, treatment_params_null) {
+#' Construct a working-model object
+#'
+#' Constructs an object of class `model` from a mean function and, optionally,
+#' its Jacobian. If `jacobian_fn` is not supplied, it is approximated via
+#' numerical differentiation with [numDeriv::jacobian()].
+#'
+#' @param mean_fn function, the mean function.
+#' @param jacobian_fn optional function, the Jacobian of `mean_fn`. If
+#'   `NULL`, computed numerically.
+#' @param nuisance_params_position integer vector, positions of the nuisance
+#'   parameters in the full parameter vector.
+#' @param treatment_params_null numeric vector, the null values of the
+#'   treatment-effect parameters.
+#'
+#' @returns an object of class `model`.
+#' @export
+model <- function(mean_fn, jacobian_fn = NULL, nuisance_params_position, treatment_params_null, param_names = NULL) {
   # If the Jacobian function is not provided, we approximate it using numerical
   # differentiation.
   if (is.null(jacobian_fn)) {
@@ -86,12 +140,23 @@ model <- function(mean_fn, jacobian_fn = NULL, nuisance_params_position, treatme
       mean_fn = mean_fn,
       jacobian_fn = jacobian_fn,
       nuisance_params_position = nuisance_params_position,
-      treatment_params_null = treatment_params_null
+      treatment_params_null = treatment_params_null,
+      param_names = param_names
     )
   )
 }
 
-concatenate_models <- function(models) {
+#' Concatenate several models into one
+#'
+#' Stacks the mean functions and (block-diagonal) Jacobians of several
+#' `model` objects into a single combined `model`, used to build one
+#' multi-outcome working model out of per-outcome models.
+#'
+#' @param models list of objects of class `model`.
+#'
+#' @returns an object of class `model` combining all elements of `models`.
+#' @export
+concatenate_models <- function(models, submodel_names = NULL) {
   if (!all(sapply(models, inherits, "model"))) {
     stop("All elements of 'models' must be of class 'model'.")
   } else {
@@ -130,16 +195,45 @@ concatenate_models <- function(models) {
   nuisance_params_position_combined <- unlist(purrr::map2(.x = models, .y = start_indices_full, function(working_model, start_index) working_model$nuisance_params_position + start_index - 1))
   treatment_params_null_combined <- unlist(lapply(models, function(working_model) working_model$treatment_params_null))
   
+  if (is.null(submodel_names)) {
+    submodel_names <- rep(list(NULL), length(models))
+  }
+  
+  param_names_combined <- unlist(purrr::map2(
+    .x = models,
+    .y = submodel_names,
+    .f = function(working_model, name) { 
+      extra_name <- if (!is.null(name)) paste0(" (", name, ")") else ""
+      paste0(working_model$param_names, extra_name)
+      }
+  ))
+  
   new_model(
     list(
       mean_fn = mean_fn_combined,
       jacobian_fn = jacobian_fn_combined,
       nuisance_params_position = nuisance_params_position_combined,
-      treatment_params_null = treatment_params_null_combined
+      treatment_params_null = treatment_params_null_combined,
+      param_names = param_names_combined
     )
   )
 }
 
+#' Split a working model by parameter/mean-vector stratum
+#'
+#' Splits `working_model` into one sub-model per unique value of
+#' `split_indices_params`, restricting the mean and Jacobian functions to the
+#' corresponding rows/columns.
+#'
+#' @param working_model an object of class `model`.
+#' @param split_indices_mu integer vector, the stratum of each element of the
+#'   mean vector.
+#' @param split_indices_params list of integers, the stratum of each
+#'   parameter (elements may have length greater than one for shared-parameter
+#'   models).
+#'
+#' @returns list of objects of class `model`, one per unique stratum.
+#' @export
 split_model <- function(working_model, split_indices_mu, split_indices_params) {
   if (!inherits(working_model, "model")) {
     stop("'working_model' must be of class 'model'.")
@@ -183,17 +277,33 @@ split_model <- function(working_model, split_indices_mu, split_indices_params) {
     )
     treatment_params_null_sub <- working_model$treatment_params_null[treatment_params_null_sub_position]
     
+    param_names_sub <- working_model$param_names[params_position_sub]
+    
     models[[i]] <- model(
       mean_fn = mean_fn_sub,
       jacobian_fn = jacobian_fn_sub,
       nuisance_params_position = nuisance_params_position_sub,
-      treatment_params_null = treatment_params_null_sub
+      treatment_params_null = treatment_params_null_sub,
+      param_names = param_names_sub
     )
   }
   
   models
 }
 
+#' Reparameterize a model to share treatment-effect parameters
+#'
+#' Wraps `working_model` in a reduced parameterization in which the
+#' treatment-effect parameters at the positions listed in
+#' `shared_param_positions` are constrained to be equal.
+#'
+#' @param working_model an object of class `model`.
+#' @param shared_param_positions numeric vector of positive integers (or a
+#'   list of such vectors, one per shared parameter), indicating positions in
+#'   the full parameter vector that should share a single value.
+#'
+#' @returns an object of class `model` with a reduced parameter vector.
+#' @export
 shared_parameter_model <- function(working_model, shared_param_positions) {
   # `shared_param_positions` must be a numeric vector of positive integers
   # indicating the positions of the shared parameters in the full parameter
@@ -282,12 +392,26 @@ shared_parameter_model <- function(working_model, shared_param_positions) {
       mean_fn = mean_fn_params,
       jacobian_fn = jacobian_fn_params,
       nuisance_params_position = nuisance_params_position,
-      treatment_params_null = treatment_params_null
+      treatment_params_null = treatment_params_null,
+      param_names = c(
+        working_model$param_names[-unlist(shared_param_positions)],
+        sapply(seq_along(shared_param_positions), function(i) working_model$param_names[shared_param_positions[[i]][1]])
+      )
     )
   )
   model_for_model_params(working_model, model_for_params)
 }
 
+#' Compose a model with its reduced-parameter model
+#'
+#' @param working_model an object of class `model`.
+#' @param model_for_params an object of class `model` mapping the reduced
+#'   (e.g. shared) parameter vector onto `working_model`'s full parameter
+#'   vector.
+#'
+#' @returns an object of class `model` parameterized by
+#'   `model_for_params`'s parameters.
+#' @keywords internal
 model_for_model_params <- function(working_model, model_for_params) {
   mean_fn_model_params <- function(gamma_model_params) {
     gamma_full <- model_for_params$mean_fn(gamma_model_params)
@@ -308,11 +432,22 @@ model_for_model_params <- function(working_model, model_for_params) {
       mean_fn = mean_fn_model_params,
       jacobian_fn = jacobian_fn_model_params,
       nuisance_params_position = model_for_params$nuisance_params_position,
-      treatment_params_null = model_for_params$treatment_params_null
+      treatment_params_null = model_for_params$treatment_params_null,
+      param_names = model_for_params$param_names
     )
   )
 }
 
+#' Validate a working-model object
+#'
+#' Checks that `working_model` has the required fields (`mean_fn`,
+#' `jacobian_fn`, `nuisance_params_position`, `treatment_params_null`) with
+#' the expected types.
+#'
+#' @param working_model an object of class `model`.
+#'
+#' @returns `TRUE`, invisibly on success; raises an error otherwise.
+#' @export
 validate_model <- function(working_model) {
   required_fields <- c("mean_fn", "jacobian_fn", "nuisance_params_position", "treatment_params_null")
   
@@ -340,3 +475,16 @@ validate_model <- function(working_model) {
   TRUE
 }
 
+#' Print a working-model object
+#'
+#' @param x an object of class `model`.
+#' @param ... unused; retained for S3 method consistency.
+#'
+#' @returns `x`, invisibly.
+#' @export
+print.model <- function(x, ...) {
+  cat("Model object:\n")
+  cat("Number of parameters:", x$no_of_params, "\n")
+  cat("Nuisance parameters positions:", paste(x$nuisance_params_position, collapse = ", "), "\n")
+  cat("Treatment parameters null values:", paste(x$treatment_params_null, collapse = ", "), "\n")
+}

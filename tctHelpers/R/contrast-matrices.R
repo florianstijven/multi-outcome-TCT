@@ -2,7 +2,20 @@
 # Contrast matrices
 # ============================================================================
 
-# Build general contrast matrix based on the Jacobian of the working model, the contrast matrix A, and the covariance matrix Sigma.
+#' Build a plug-in contrast matrix
+#'
+#' Constructs the contrast matrix `B_n` used in the targeted test from a
+#' working model's Jacobian, a user-specified contrast matrix `A`, and the
+#' first-stage covariance matrix `Sigma`.
+#'
+#' @param jacobian numeric matrix, the Jacobian of the working model's mean
+#'   function evaluated at the null estimate.
+#' @param A numeric matrix, the contrast matrix defining the omnibus null
+#'   hypothesis (see [build_omnibus_contrast_multi_outcome()]).
+#' @param Sigma numeric matrix, the first-stage covariance estimate.
+#'
+#' @returns numeric matrix, the plug-in contrast matrix `B_n`.
+#' @export
 build_contrast_matrix <- function(jacobian, A, Sigma) {
   # B_contrast <- t(A) %*% solve(A %*% Sigma %*% t(A)) %*% A %*% jacobian
   B_contrast <- t(A) %*% MASS::ginv(A %*% Sigma %*% t(A)) %*% A %*% jacobian
@@ -10,10 +23,19 @@ build_contrast_matrix <- function(jacobian, A, Sigma) {
 }
 
 
-# Contrast matrix for omnibus test with a single outcome. The contrast matrix is of the form:
-# | 0 -1 0 ... 0 | 0 1 0 ... 0 |
-# | 0 0 -1 ... 0 | 0 0 1 ... 0 |
-# | 0 0 0 ... -1 | 0 0 0 ... 1 |
+#' Omnibus contrast matrix for a single outcome
+#'
+#' Builds the contrast matrix testing equality of the control and
+#' experimental-group means at every post-baseline time point, for a single
+#' outcome. The contrast matrix is of the form:
+#' | 0 -1 0 ... 0 | 0 1 0 ... 0 |
+#' | 0 0 -1 ... 0 | 0 0 1 ... 0 |
+#' | 0 0 0 ... -1 | 0 0 0 ... 1 |
+#'
+#' @param K integer, the number of post-baseline time points.
+#'
+#' @returns numeric matrix with `K` rows and `2 * (K + 1)` columns.
+#' @export
 build_omnibus_contrast_single_outcome <- function(K) {
   contrast <- matrix(0, nrow = K, ncol = 2 * (K + 1))
   contrast[, 2:(K + 1)] <- diag(-1, K)
@@ -22,6 +44,21 @@ build_omnibus_contrast_single_outcome <- function(K) {
 }
 
 # Contrast matrix for omnibus test with multiple outcomes.
+#' Omnibus contrast matrix for multiple outcomes
+#'
+#' Block-diagonal stacking of [build_omnibus_contrast_single_outcome()] across
+#' outcomes, testing equality of the control and experimental-group means at
+#' every post-baseline time point for every outcome.
+#'
+#' @param J integer, the number of outcomes. Ignored (and recomputed) when
+#'   `times` is supplied.
+#' @param K integer, the number of post-baseline time points, shared across
+#'   outcomes. Ignored (and recomputed per-outcome) when `times` is supplied.
+#' @param times optional list of numeric time vectors, one per outcome, used
+#'   when outcomes have differing numbers of time points.
+#'
+#' @returns numeric contrast matrix.
+#' @export
 build_omnibus_contrast_multi_outcome <- function(J, K, times = NULL) {
   if (!is.null(times)) {
     if (!is.list(times)) {
@@ -56,6 +93,16 @@ build_omnibus_contrast_multi_outcome <- function(J, K, times = NULL) {
   }
 }
 
+#' Summing contrast matrix for multiple outcomes
+#'
+#' Builds a contrast matrix that sums the treatment effects across all
+#' outcomes at each shared time point. All outcomes must share the same
+#' number of measurements.
+#'
+#' @inheritParams build_omnibus_contrast_multi_outcome
+#'
+#' @returns numeric contrast matrix with `K` rows.
+#' @export
 build_summing_contrast_multi_outcome <- function(J, K, times = NULL) {
   # The time points in times should agree; otherwise, summing across outcomes is not
   # meaningful.
@@ -85,7 +132,20 @@ build_summing_contrast_multi_outcome <- function(J, K, times = NULL) {
   summing_contrast
 }
 
-# Contrast matrix for linear working model with multiple outcomes.
+#' Linear-slope contrast matrix for multiple outcomes
+#'
+#' Builds the plug-in contrast matrix for testing an outcome-specific linear
+#' slope difference between treatment groups.
+#'
+#' @param J integer, the number of outcomes.
+#' @param K integer, the number of post-baseline time points (used only when
+#'   `times` is a plain numeric vector shared across outcomes).
+#' @param times numeric vector (shared across outcomes) or list of numeric
+#'   vectors, one per outcome.
+#' @param Sigma numeric matrix, the first-stage covariance estimate.
+#'
+#' @returns numeric contrast matrix with `J` rows.
+#' @export
 build_linear_contrast_multi_outcome <- function(J, K, times, Sigma) {
   if (!is.list(times) & !is.numeric(times)) {
     stop("times must be a numeric vector or a list of numeric vectors.")
@@ -119,8 +179,16 @@ build_linear_contrast_multi_outcome <- function(J, K, times, Sigma) {
   build_contrast_matrix(jacobian, A_contrast, Sigma)
 }
 
-# Contrast matrix for linear working model with multiple outcomes, assuming a
-# common slope across outcomes.
+#' Common linear-slope contrast matrix across outcomes
+#'
+#' Builds the plug-in contrast matrix for testing a treatment-effect slope
+#' shared across all outcomes.
+#'
+#' @param times list of numeric time vectors, one per outcome.
+#' @param Sigma numeric matrix, the first-stage covariance estimate.
+#'
+#' @returns numeric contrast matrix with 1 row.
+#' @export
 build_linear_contrast_common <- function(times, Sigma) {
   if (!is.list(times)) {
     stop("times must be a list of numeric vectors.")

@@ -22,7 +22,7 @@
 
 #' Data-Adaptive Targeted Test Based on Slowing Model
 #'
-#' [targeted_test_proportional_slowing()] estimates the slowing model parameters
+#' `targeted_test()` estimates the slowing model parameters
 #' under the null hypothesis and computes a targeted test statistic for the
 #' omnibus null hypothesis of no treatment effect across multiple outcomes.
 #'
@@ -36,6 +36,7 @@
 #'  - `statistic`: The computed test statistic.
 #'  - `df`: The degrees of freedom for the test statistic.
 #'  - `p_value`: The p-value associated with the test statistic.
+#' @export
 targeted_test <- function(m_tilde,
                           Sigma,
                           working_model,
@@ -57,7 +58,7 @@ targeted_test <- function(m_tilde,
   
   # Step 2: build the Jacobian at the null estimate
   jacobian <- working_model$jacobian_fn_treatment_null(
-    gamma0 = gls_fitted_null$gamma_hat
+    gamma0 = stats::coef(gls_fitted_null)
   )
   
   # # If parameters are shared across outcomes, we need to adjust the Jacobian to
@@ -98,6 +99,7 @@ targeted_test <- function(m_tilde,
 #' - `statistic`: The computed test statistic.
 #' - `df`: The degrees of freedom for the test statistic.
 #' - `p_value`: The p-value associated with the test statistic.
+#' @export
 targeted_test_statistic <- function(B, m_tilde, Sigma) {
   BSB_inv <- solve(B %*% Sigma %*% Matrix::t(B))
   T_hat <- as.numeric(t(m_tilde) %*% Matrix::t(B) %*% BSB_inv %*% B %*% m_tilde)

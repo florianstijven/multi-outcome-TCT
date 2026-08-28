@@ -1,23 +1,30 @@
 * Implement more unit tests
-
-- Relatedly, we could add "outcome strata" and "treatment strata" for plotting. 
-  If we have the fitted parameters, model, m_tilde, and Sigma, we can easily 
-  construct a GoF plot with SEs for the true means. 
   
 * Add more features for building models for small building blocks?
   - I don't know which features beyond concatenation and shared parameters could be useful though.
   
-* improve documentation
 
-* Fix problems with fitting 4PL
-  - treat asymptotes as parameters?
-  - Problem was different scaling of inflection vs slope. Treating asymptotes as 
-  parameters could still be useful though.
 
-* Determine the weights each outcome and time point receive in the contrast
 
 * Do some very prelim sims
   - I should probably also implement a permutation test because type I error may be too inflatef
   for realistic sample sizes?
-  - split up file for getting complete case data. No real helper functions
-  should be defined in main sim script.
+  
+# User Friendliness
+
+* improve documentation
+
+* Determine the weights each outcome and time point receive in the contrast
+  
+# Structure
+  
+* Define test result as a proper S3 object with methods
+
+# Additional features
+
+* We should also properly implement estimating the full model.
+  - This includes inferences for all parameters with the warning that CIs etc only 
+  make sense if the model is correctly specified. 
+  
+  
+  

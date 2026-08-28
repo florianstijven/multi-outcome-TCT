@@ -193,8 +193,7 @@ problematic_items_CDRSB <- c("CARE")
 # Local Power
 # ============================================================================
 
-list.files(path = file.path("R", "helper-functions"), pattern = "\\.R$", full.names = TRUE) %>%
-  lapply(source, echo = FALSE)
+library(tctHelpers)
 
 # Function to extract the time points, mean vector, and covariance matrix for a
 # given outcome.
@@ -751,7 +750,7 @@ test_result_NC_shared <- targeted_test(
 
 Delta <- compute_treatment_shift(
   model = shared_proportional_slowing_model_4PL,
-  params = c(test_result_4PL_shared$gls_fitted_null$gamma_hat, 0.60),
+  params = c(coef(test_result_4PL_shared$gls_fitted_null), 0.60),
   times = times
 )
 m_tilde_d <- m_tilde + Delta

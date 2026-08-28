@@ -7,6 +7,8 @@
 #' later in the second-stage fitting routines.
 #'
 #' @keywords internal
+#' @name slowing-models
+NULL
 
 #' Construct a slowing model for one outcome
 #'
@@ -23,6 +25,7 @@
 #' @returns list containing the model metadata, time-mapping function, null
 #'   slowing parameters, and functions for evaluating the mean vector under the
 #'   null and full parameterizations.
+#' @export
 make_slowing_model <- function(times, ref, type) {
   if (type == "proportional") {
     time_mapping = function(t, gamma1) {
@@ -47,6 +50,12 @@ make_slowing_model <- function(times, ref, type) {
   }
   
   reference_trajectory_functions_list = reference_trajectory_f_list(times, ref)
+  
+  # Names for model parameters
+  param_names <- c(
+    paste0("ref_param_", seq_len(reference_trajectory_functions_list$no_params)),
+    paste0("slowing_param_", seq_len(length(null_gamma1)))
+  )
   
   model(
     mean_fn = function(gamma) {
@@ -79,7 +88,8 @@ make_slowing_model <- function(times, ref, type) {
       )
     },
     nuisance_params_position = seq_len(reference_trajectory_functions_list$no_params),
-    treatment_params_null = null_gamma1
+    treatment_params_null = null_gamma1,
+    param_names = param_names
   )
 }
 
@@ -95,10 +105,28 @@ make_slowing_model <- function(times, ref, type) {
 #' @param type character scalar passed to `make_slowing_model()`.
 #'
 #' @returns list of slowing-model objects, one for each outcome.
-make_slowing_models <- function(times, ref, type) {
-  concatenate_models(lapply(times, function(t) make_slowing_model(t, ref, type)))
+#' @export
+make_slowing_models <- function(times, ref, type, outcome_names = NULL) {
+  if (is.null(outcome_names)) {
+    outcome_names <- paste0("Outcome ", seq_along(times))
+  }
+  concatenate_models(lapply(times, function(t) make_slowing_model(t, ref, type)), submodel_names = outcome_names)
 }
 
+#' Jacobian of a slowing model, one outcome
+#'
+#' @param times numeric vector of measurement times.
+#' @param ref_d function, the time-derivative of the reference trajectory.
+#' @param jacobian_ref function, the Jacobian of the reference trajectory.
+#' @param gamma0 numeric vector, the reference-trajectory parameters.
+#' @param gamma1 numeric vector, the time-mapping (slowing) parameters.
+#' @param time_mapping function mapping `(t, gamma1)` to mapped time points.
+#' @param time_mapping_deriv function, the derivative of `time_mapping` with
+#'   respect to `gamma1`.
+#'
+#' @returns numeric matrix, the stacked Jacobian for the control and
+#'   experimental groups.
+#' @export
 jacobian_slowing_single_outcome <- function(times, ref_d, jacobian_ref, gamma0, gamma1, time_mapping, time_mapping_deriv){
 
   control_jacobian = cbind(jacobian_ref(times, gamma0),
@@ -111,7 +139,34 @@ jacobian_slowing_single_outcome <- function(times, ref_d, jacobian_ref, gamma0, 
   rbind(control_jacobian, exp_jacobian)
 }
 
+#' Check that a parameter vector has the expected length
+#'
+#' @param params numeric vector of parameters.
+#' @param no_params integer, the expected length.
+#'
+#' @returns invisible `NULL`; called for its side effect of raising an error
+#'   when the lengths don't match.
+#' @export
+check_no_params <- function(params, no_params) {
+  if (length(params) != no_params) {
+    stop("Length of params (", length(params), ") does not match expected number of parameters (", no_params, ").")
+  }
+}
 
+
+#' Reference-trajectory function list, dispatched by model type
+#'
+#' Builds a list of functions (`eval`, `jacobian`, `time_derivative`) and the
+#' expected parameter count (`no_params`) for the requested reference
+#' trajectory.
+#'
+#' @param times numeric vector of measurement times, used to derive knots for
+#'   the `"nc_spline"` reference.
+#' @param ref character, one of `"4PL"`, `"nc_spline"`, or `"4PL_asympt"`.
+#'
+#' @returns list with elements `eval`, `jacobian`, `time_derivative` (each a
+#'   function of `times` and `params`), and `no_params` (integer).
+#' @export
 reference_trajectory_f_list <- function(times, ref) {
   if (ref == "4PL") {
     no_params = 2
@@ -190,11 +245,5 @@ reference_trajectory_f_list <- function(times, ref) {
     )
   } else {
     stop("Unknown reference model: ", ref)
-  }
-}
-
-check_no_params <- function(params, no_params) {
-  if (length(params) != no_params) {
-    stop("Length of params (", length(params), ") does not match expected number of parameters (", no_params, ").")
   }
 }

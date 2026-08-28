@@ -1,0 +1,23 @@
+Package: tctHelpers
+Title: Helper Functions for Multi-Outcome Targeted Test Simulations
+Version: 0.0.0.9000
+Authors@R: person("Multi-Outcome-TCT", "Author", email = "you@example.com", role = c("aut", "cre"))
+Description: Internal helper functions (working-model construction, GLS
+    fitting, targeted tests, contrast matrices, and local-power utilities)
+    used by the multi-outcome-TCT project. Packaging these functions gives
+    their closures a stable namespace (instead of .GlobalEnv), which is
+    required for them to work correctly inside parallel (future/furrr)
+    workers.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+    MASS,
+    Matrix,
+    purrr,
+    numDeriv,
+    splines,
+    magrittr,
+    stats,
+    ggplot2
+Config/roxygen2/version: 8.0.0

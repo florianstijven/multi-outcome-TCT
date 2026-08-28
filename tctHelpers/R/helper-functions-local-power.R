@@ -1,15 +1,36 @@
 # Helper functions for local power.
 
-
-# Compute local power from non-centrality parameter (ncp), degrees of freedom (df), and significance level (alpha),
-# using the non-central chi-squared distribution.
+#' Local power from a non-centrality parameter
+#'
+#' Computes local power from a non-centrality parameter, degrees of freedom,
+#' and significance level, using the non-central chi-squared distribution.
+#'
+#' @param ncp numeric, the non-centrality parameter.
+#' @param df integer, the degrees of freedom.
+#' @param alpha numeric, the significance level.
+#'
+#' @returns numeric, the local power.
+#' @export
 power_from_ncp <- function(ncp, df, alpha) {
   critical_value <- qchisq(1 - alpha, df = df)
   1 - pchisq(critical_value, df = df, ncp = ncp)
 }
 
-# Compute the power curve for a range of effect sizes (h_grid) given the contrast matrix B,
-# significance level (alpha), covariance matrix (Sigma), and base effect size (base_effect).
+#' Compute a local power curve
+#'
+#' Computes power for a range of effect sizes (`h_grid`) given the contrast
+#' matrix `B`, significance level `alpha`, covariance matrix `Sigma`, and base
+#' effect size `base_effect`.
+#'
+#' @param B numeric matrix, the plug-in contrast matrix.
+#' @param h_grid numeric vector of effect-size multipliers.
+#' @param alpha numeric, the significance level.
+#' @param Sigma numeric matrix, the first-stage covariance estimate.
+#' @param base_effect numeric vector, the base local-effect vector
+#'   (see [local_shift_vector()]).
+#'
+#' @returns data.frame with columns `h`, `power`, `ncp`, and `df`.
+#' @export
 compute_power_curve <- function(B, h_grid, alpha, Sigma, base_effect) {
   df = nrow(B)
 
@@ -37,8 +58,13 @@ compute_power_curve <- function(B, h_grid, alpha, Sigma, base_effect) {
 # Local shift functions
 # ============================================================================
 
-# Compute the local effect vector (base_effect elsewhere) given the local
-# parametric model's Jacobian.
+#' Local effect vector from a local parametric model's Jacobian
+#'
+#' @param jacobian numeric matrix, the Jacobian of the local parametric model.
+#' @param h numeric, the local perturbation size.
+#'
+#' @returns numeric column vector, the local effect (base-effect) vector.
+#' @export
 local_shift_vector <- function(jacobian, h) {
 
   jacobian_gamma_theta <- matrix(0, nrow = ncol(jacobian), ncol = 1)
@@ -47,6 +73,16 @@ local_shift_vector <- function(jacobian, h) {
   jacobian %*% jacobian_gamma_theta
 }
 
+#' Validate a per-outcome parameter list
+#'
+#' Checks that `params_list` is a list with exactly one element per outcome.
+#'
+#' @param params_list list of per-outcome parameter vectors.
+#' @param J integer, the expected number of outcomes.
+#'
+#' @returns invisible `NULL`; called for its side effect of raising an error
+#'   when validation fails.
+#' @export
 validate_params_list <- function(params_list, J) {
   if (!is.list(params_list)) {
     stop("params_list must be a list.")
@@ -58,6 +94,19 @@ validate_params_list <- function(params_list, J) {
 
 
 
+#' Local shift vector for a slowing model, one outcome
+#'
+#' @param ref character, the reference trajectory (`"4PL"` or `"nc_spline"`).
+#' @param J integer, the number of outcomes.
+#' @param K integer, the number of post-baseline time points.
+#' @param times numeric vector (shared across outcomes) or list of numeric
+#'   vectors, one per outcome.
+#' @param h numeric, the local perturbation size.
+#' @param params_list list of per-outcome reference-trajectory parameters.
+#' @param ... additional arguments forwarded to the spline helpers.
+#'
+#' @returns numeric column vector, the local effect vector.
+#' @export
 local_shift_vector_slowing_outcome <- function(ref = "4PL",
                                                J,
                                                K,
@@ -90,6 +139,18 @@ local_shift_vector_slowing_outcome <- function(ref = "4PL",
   local_shift_vector(jacobian_local, h)
 }
 
+#' Stacked mean vector for a reference trajectory model
+#'
+#' @param ref character, the reference trajectory (`"4PL"` or `"nc_spline"`).
+#' @param J integer, the number of outcomes (inferred from `params_list`).
+#' @param K integer, unused; retained for interface consistency.
+#' @param times numeric vector (shared across outcomes) or list of numeric
+#'   vectors, one per outcome.
+#' @param params_list list of per-outcome reference-trajectory parameters.
+#' @param ... additional arguments forwarded to the spline helpers.
+#'
+#' @returns numeric vector, the stacked mean values.
+#' @export
 mean_vector <- function(ref = "4PL",
                         J,
                         K,
@@ -136,6 +197,17 @@ mean_vector <- function(ref = "4PL",
 # Jacobian functions
 # ============================================================================
 
+#' Jacobian of a slowing model, one outcome (local-power helper)
+#'
+#' @param K integer, the number of post-baseline time points.
+#' @param times numeric vector of measurement times.
+#' @param ref character, the reference trajectory (`"4PL"` or `"nc_spline"`).
+#' @param params numeric vector of reference-trajectory parameters.
+#' @param ... additional arguments forwarded to the spline helpers.
+#'
+#' @returns numeric matrix, the stacked Jacobian for the control and
+#'   experimental groups.
+#' @export
 jacobian_slowing_single_outcome_temp <- function(K, times, ref = "4PL", params, ...) {
   jacobian_ref <- jacobian_ref_pm(times, ref = ref, params = params, ...)
   if (is.null(dim(jacobian_ref))) {
@@ -154,6 +226,12 @@ jacobian_slowing_single_outcome_temp <- function(K, times, ref = "4PL", params, 
   jacobian
 }
 
+#' Jacobian of a reference trajectory, dispatched by model type
+#'
+#' @inheritParams jacobian_slowing_single_outcome_temp
+#'
+#' @returns numeric matrix, the Jacobian of the reference trajectory.
+#' @export
 jacobian_ref_pm <- function(times, ref = "4PL", params, ...) {
   if (ref == "4PL") {
     jacobian_4PL(times = times, params = params)
@@ -164,6 +242,12 @@ jacobian_ref_pm <- function(times, ref = "4PL", params, ...) {
   }
 }
 
+#' Time-derivative of a reference trajectory, dispatched by model type
+#'
+#' @inheritParams jacobian_slowing_single_outcome_temp
+#'
+#' @returns numeric vector, the time-derivative of the reference trajectory.
+#' @export
 ref_d <- function(times, ref = "4PL", params, ...) {
   if (ref == "4PL") {
     time_d_4PL(times = times, params = params)
@@ -176,6 +260,20 @@ ref_d <- function(times, ref = "4PL", params, ...) {
 
 
 
+#' Jacobian of a slowing model across multiple outcomes
+#'
+#' @param J integer, the number of outcomes.
+#' @param K integer, unused; retained for interface consistency.
+#' @param times numeric vector (shared across outcomes) or list of numeric
+#'   vectors, one per outcome.
+#' @param ref character, the reference trajectory (`"4PL"` or `"nc_spline"`).
+#' @param params_list list of per-outcome reference-trajectory parameters.
+#' @param slowing_only logical; if `TRUE`, retain only the columns
+#'   corresponding to the treatment-effect (slowing) parameters.
+#' @param ... additional arguments forwarded to the spline helpers.
+#'
+#' @returns numeric matrix, the stacked Jacobian across all outcomes.
+#' @export
 jacobian_slowing_multiple_outcomes <- function(J,
                                                K,
                                                times,
@@ -247,6 +345,13 @@ jacobian_slowing_multiple_outcomes <- function(J,
 }
 
 
+#' Jacobian of a slowing model with a shared treatment-effect parameter
+#'
+#' @inheritParams jacobian_slowing_multiple_outcomes
+#'
+#' @returns numeric matrix, the stacked Jacobian with treatment-effect
+#'   parameters shared across outcomes.
+#' @export
 jacobian_slowing_multiple_outcomes_shared <- function(J,
                                                       K,
                                                       times,
@@ -323,6 +428,19 @@ jacobian_slowing_multiple_outcomes_shared <- function(J,
 # Covariance structure
 # ============================================================================
 
+#' Kronecker-structured covariance matrix
+#'
+#' Builds a covariance matrix with a Kronecker-product structure across
+#' treatment arms, outcomes, and time.
+#'
+#' @param K integer, the number of post-baseline time points.
+#' @param J integer, the number of outcomes.
+#' @param rho_time numeric, the AR(1)-type time correlation parameter.
+#' @param rho_outcome numeric, the cross-outcome correlation parameter.
+#'
+#' @returns list with elements `Sigma` (the covariance matrix) and
+#'   `time_points` (the time grid used to construct it).
+#' @export
 build_kronecker_covariance <- function(K,
                                        J,
                                        rho_time = 0.8,
@@ -349,22 +467,23 @@ build_kronecker_covariance <- function(K,
 # Varia
 # ============================================================================
 
-# Check whether the elements of a list are of equal length.
+#' Check whether list elements have equal length
+#'
+#' @param lst a list.
+#'
+#' @returns logical scalar.
+#' @export
 check_equal_length <- function(lst) {
   lengths <- sapply(lst, length)
   all(lengths == lengths[1])
 }
 
-# Check whether the elements of a list are identical.
+#' Check whether list elements are identical
+#'
+#' @param lst a list.
+#'
+#' @returns logical scalar.
+#' @export
 check_identical <- function(lst) {
   all(sapply(lst, function(x) identical(x, lst[[1]])))
 }
-
-
-
-
-
-
-
-
-
