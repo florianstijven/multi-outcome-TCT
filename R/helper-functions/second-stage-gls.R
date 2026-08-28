@@ -248,7 +248,7 @@ two_stage_gls_null <- function(m_tilde,
     start_list[[i]] <- start[split_indices_params_null == unique_strata[i]]
   }
   models_list <- split_model(
-    model = working_model,
+    working_model = working_model,
     split_indices_mu = split_indices_mu,
     split_indices_params = split_indices_params
   )

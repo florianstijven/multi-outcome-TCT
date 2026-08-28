@@ -113,22 +113,22 @@ concatenate_models <- function(models) {
             purrr::map2(
               .x = models,
               .y = start_indices_full,
-              .f =  function(model, start_index) {
-                end_index <- start_index + length(model$nuisance_params_position) + length(model$treatment_params_null) - 1
-                model$mean_fn(gamma[start_index:end_index])
+              .f =  function(working_model, start_index) {
+                end_index <- start_index + length(working_model$nuisance_params_position) + length(working_model$treatment_params_null) - 1
+                working_model$mean_fn(gamma[start_index:end_index])
               }
             ))
   }
   
   jacobian_fn_combined <- function(gamma) {
-    do.call(Matrix::bdiag, purrr::map2(.x = models, .y = start_indices_full, .f = function(model, start_index) {
-      end_index <- start_index + length(model$nuisance_params_position) + length(model$treatment_params_null) - 1
-      model$jacobian_fn(gamma[start_index:end_index])
+    do.call(Matrix::bdiag, purrr::map2(.x = models, .y = start_indices_full, .f = function(working_model, start_index) {
+      end_index <- start_index + length(working_model$nuisance_params_position) + length(working_model$treatment_params_null) - 1
+      working_model$jacobian_fn(gamma[start_index:end_index])
     }))
   }
   
-  nuisance_params_position_combined <- unlist(purrr::map2(.x = models, .y = start_indices_full, function(model, start_index) model$nuisance_params_position + start_index - 1))
-  treatment_params_null_combined <- unlist(lapply(models, function(model) model$treatment_params_null))
+  nuisance_params_position_combined <- unlist(purrr::map2(.x = models, .y = start_indices_full, function(working_model, start_index) working_model$nuisance_params_position + start_index - 1))
+  treatment_params_null_combined <- unlist(lapply(models, function(working_model) working_model$treatment_params_null))
   
   new_model(
     list(
@@ -140,9 +140,9 @@ concatenate_models <- function(models) {
   )
 }
 
-split_model <- function(model, split_indices_mu, split_indices_params) {
-  if (!inherits(model, "model")) {
-    stop("'model' must be of class 'model'.")
+split_model <- function(working_model, split_indices_mu, split_indices_params) {
+  if (!inherits(working_model, "model")) {
+    stop("'working_model' must be of class 'model'.")
   }
   # 
   # if (!is.numeric(split_indices) || any(split_indices <= 0)) {
@@ -163,25 +163,25 @@ split_model <- function(model, split_indices_mu, split_indices_params) {
     )
 
     mean_fn_sub <- function(gamma_sub) {
-      gamma <- rep(0, model$no_of_params)
+      gamma <- rep(0, working_model$no_of_params)
       gamma[params_match] <- gamma_sub
-      model$mean_fn(gamma)[split_indices_mu == unique_split_indices[i]]
+      working_model$mean_fn(gamma)[split_indices_mu == unique_split_indices[i]]
     }
     jacobian_fn_sub <- function(gamma_sub) {
-      gamma <- rep(0, model$no_of_params)
+      gamma <- rep(0, working_model$no_of_params)
       gamma[params_match] <- gamma_sub
-      model$jacobian_fn(gamma)[split_indices_mu == unique_split_indices[i], params_match, drop = FALSE]
+      working_model$jacobian_fn(gamma)[split_indices_mu == unique_split_indices[i], params_match, drop = FALSE]
     }
     
     params_position_sub <- which(params_match)
-    nuisance_params_position_sub <- which(params_position_sub %in% model$nuisance_params_position)
+    nuisance_params_position_sub <- which(params_position_sub %in% working_model$nuisance_params_position)
     treatment_params_null_sub_position <- which(
-      model$treatment_params_position %in% which(
+      working_model$treatment_params_position %in% which(
         params_match &
-          seq_len(model$no_of_params) %in% model$treatment_params_position
+          seq_len(working_model$no_of_params) %in% working_model$treatment_params_position
       )
     )
-    treatment_params_null_sub <- model$treatment_params_null[treatment_params_null_sub_position]
+    treatment_params_null_sub <- working_model$treatment_params_null[treatment_params_null_sub_position]
     
     models[[i]] <- model(
       mean_fn = mean_fn_sub,
@@ -194,7 +194,7 @@ split_model <- function(model, split_indices_mu, split_indices_params) {
   models
 }
 
-shared_parameter_model <- function(model, shared_param_positions) {
+shared_parameter_model <- function(working_model, shared_param_positions) {
   # `shared_param_positions` must be a numeric vector of positive integers
   # indicating the positions of the shared parameters in the full parameter
   # vector, or it should be a list of such vectors, one for each shared
@@ -208,18 +208,18 @@ shared_parameter_model <- function(model, shared_param_positions) {
     shared_param_positions <- list(shared_param_positions)
   }
   
-  # Construct a model for the parameters of `model`, taking into account the
+  # Construct a model for the parameters of `working_model`, taking into account the
   # shared parameters. The new parameter vector will have one entry for each
   # shared parameter, and one entry for each non-shared parameter. The mean
   # function of the new model will map the new parameter vector to the full
-  # parameter vector of `model`.
-  no_of_non_shared_params <- length(model$nuisance_params_position) + length(model$treatment_params_null) - length(unlist(shared_param_positions))
-  no_of_non_shared_treatment_params <- length(model$treatment_params_null) - length(unlist(shared_param_positions))
+  # parameter vector of `working_model`.
+  no_of_non_shared_params <- length(working_model$nuisance_params_position) + length(working_model$treatment_params_null) - length(unlist(shared_param_positions))
+  no_of_non_shared_treatment_params <- length(working_model$treatment_params_null) - length(unlist(shared_param_positions))
   
   mean_fn_params <- function(gamma_shared) {
-    # Construct the full parameter vector for `model` from the parameters of
+    # Construct the full parameter vector for `working_model` from the parameters of
     # `gamma_shared`, taking into account the shared parameters.
-    gamma_full <- numeric(length = model$no_of_params)
+    gamma_full <- numeric(length = working_model$no_of_params)
     gamma_full[-unlist(shared_param_positions)] <- gamma_shared[seq_len(no_of_non_shared_params)]
     
     # Fill in the shared parameters.
@@ -231,7 +231,7 @@ shared_parameter_model <- function(model, shared_param_positions) {
   }
   
   jacobian_fn_params <- function(gamma_shared) {
-    jacobian_full <- matrix(0, nrow = model$no_of_params, ncol = length(gamma_shared))
+    jacobian_full <- matrix(0, nrow = working_model$no_of_params, ncol = length(gamma_shared))
     # Fill in the Jacobian for the non-shared parameters.
     jacobian_full[-unlist(shared_param_positions), seq_len(no_of_non_shared_params)] <- diag(1, nrow = no_of_non_shared_params)
     
@@ -246,25 +246,25 @@ shared_parameter_model <- function(model, shared_param_positions) {
   # The function assumes that only treatment-effect parameters can be shared.
   # The treatment-effect parameters are grouped together at the end of the
   # parameter vector, so the nuisance parameters the first
-  # `length(model$nuisance_params_position)` entries of the parameter vector.
-  nuisance_params_position = seq_len(length(model$nuisance_params_position))
+  # `length(working_model$nuisance_params_position)` entries of the parameter vector.
+  nuisance_params_position = seq_len(length(working_model$nuisance_params_position))
   
   # Determine the null values for the non-shared treatment-effect parameters.
-  non_shared_treatment_params_position_complement <- c(model$nuisance_params_position, unlist(shared_param_positions))
-  non_shared_treatment_params_position <- seq_len(model$no_of_params)[-non_shared_treatment_params_position_complement]
+  non_shared_treatment_params_position_complement <- c(working_model$nuisance_params_position, unlist(shared_param_positions))
+  non_shared_treatment_params_position <- seq_len(working_model$no_of_params)[-non_shared_treatment_params_position_complement]
   # Relative position of the non-shared treatment-effect parameters in the
   # original treatment-effect parameter vector.
   non_shared_treatment_params_position_subset <- sapply(
     non_shared_treatment_params_position,
     function(pos) {
-      which.max(model$treatment_params_position == pos)
+      which.max(working_model$treatment_params_position == pos)
     }
   )
   shared_treatment_params_position_subset <- 
     sapply(
       shared_param_positions,
       function(positions) {
-        which.max(model$treatment_params_position %in% positions)
+        which.max(working_model$treatment_params_position %in% positions)
       }
     )
   
@@ -274,27 +274,29 @@ shared_parameter_model <- function(model, shared_param_positions) {
 
   treatment_params_null <- numeric(length = no_of_non_shared_treatment_params + length(shared_param_positions))
   
-  treatment_params_null[seq_len(no_of_non_shared_treatment_params)] <- model$treatment_params_null[non_shared_treatment_params_position_subset]
-  treatment_params_null[1:length(shared_param_positions) + no_of_non_shared_treatment_params] <- model$treatment_params_null[shared_treatment_params_position_subset]
+  treatment_params_null[seq_len(no_of_non_shared_treatment_params)] <- working_model$treatment_params_null[non_shared_treatment_params_position_subset]
+  treatment_params_null[1:length(shared_param_positions) + no_of_non_shared_treatment_params] <- working_model$treatment_params_null[shared_treatment_params_position_subset]
   
-  model_for_params <- model(
-    mean_fn = mean_fn_params,
-    jacobian_fn = jacobian_fn_params,
-    nuisance_params_position = nuisance_params_position,
-    treatment_params_null = treatment_params_null
+  model_for_params <- new_model(
+    list(
+      mean_fn = mean_fn_params,
+      jacobian_fn = jacobian_fn_params,
+      nuisance_params_position = nuisance_params_position,
+      treatment_params_null = treatment_params_null
+    )
   )
-  model_for_model_params(model, model_for_params)
+  model_for_model_params(working_model, model_for_params)
 }
 
-model_for_model_params <- function(model, model_for_params) {
+model_for_model_params <- function(working_model, model_for_params) {
   mean_fn_model_params <- function(gamma_model_params) {
     gamma_full <- model_for_params$mean_fn(gamma_model_params)
-    model$mean_fn(gamma_full)
+    working_model$mean_fn(gamma_full)
   }
   
   jacobian_fn_model_params <- function(gamma_model_params) {
     gamma_full <- model_for_params$mean_fn(gamma_model_params)
-    jacobian_full <- model$jacobian_fn(gamma_full)
+    jacobian_full <- working_model$jacobian_fn(gamma_full)
     
     jacobian_model_params <- model_for_params$jacobian_fn(gamma_model_params)
     
@@ -311,27 +313,27 @@ model_for_model_params <- function(model, model_for_params) {
   )
 }
 
-validate_model <- function(model) {
+validate_model <- function(working_model) {
   required_fields <- c("mean_fn", "jacobian_fn", "nuisance_params_position", "treatment_params_null")
   
-  missing_fields <- setdiff(required_fields, names(model))
+  missing_fields <- setdiff(required_fields, names(working_model))
   if (length(missing_fields) > 0) {
     stop("Model is missing required fields: ", paste(missing_fields, collapse = ", "))
   }
   
-  if (!is.function(model$mean_fn)) {
+  if (!is.function(working_model$mean_fn)) {
     stop("'mean_fn' must be a function.")
   }
   
-  if (!is.function(model$jacobian_fn)) {
+  if (!is.function(working_model$jacobian_fn)) {
     stop("'jacobian_fn' must be a function.")
   }
   
-  if (!is.numeric(model$nuisance_params_position) || any(model$nuisance_params_position <= 0)) {
+  if (!is.numeric(working_model$nuisance_params_position) || any(working_model$nuisance_params_position <= 0)) {
     stop("'nuisance_params_position' must be a numeric vector of positive integers.")
   }
   
-  if (!is.numeric(model$treatment_params_null)) {
+  if (!is.numeric(working_model$treatment_params_null)) {
     stop("'treatment_params_null' must be a numeric vector.")
   }
   
