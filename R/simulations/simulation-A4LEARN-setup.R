@@ -81,6 +81,9 @@ MMSE_tbl_complete_cases <- MMSE_tbl %>%
 MMSE_tbl_complete_cases_control <- MMSE_tbl_complete_cases %>%
   filter(TX == "Placebo")
 
+MMSE_tbl_complete_cases_experimental <- MMSE_tbl_complete_cases %>%
+  filter(TX == "Solanezumab")
+
 
 
 
@@ -145,6 +148,9 @@ CDRSB_tbl_complete_cases <- CDRSB_tbl %>%
 CDRSB_tbl_complete_cases_control <- CDRSB_tbl_complete_cases %>%
   filter(TX == "Placebo")
 
+CDRSB_tbl_complete_cases_experimental <- CDRSB_tbl_complete_cases %>%
+  filter(TX == "Solanezumab")
+
 
 CDRSB_summary_tbl <- CDRSB_tbl_complete_cases %>%
   group_by(item, TX, weeks_since_randomization) %>%
@@ -172,6 +178,71 @@ CDRSB_summary_tbl %>%
   xlab("Weeks since Randomization") +
   ylab("Mean Score") +
   theme(legend.position = "bottom")
+
+## PACC -----------
+
+# # Data set with CDRSB subitem scores.
+# PACC_tbl = A4LEARN::PACC %>%
+#   pivot_longer(cols = c(4, 7:10),
+#                names_to = "item",
+#                values_to = "score") %>%
+#   left_join(
+#     clinical_data %>% select(BID, VISITCD, weeks_since_randomization, TX, ADURW) %>%
+#       group_by(BID, VISITCD) %>%
+#       slice_head() %>%
+#       mutate(VISCODE = as.double(VISITCD)),
+#     by = c("BID", "VISCODE")
+#   ) %>%
+#   filter(!is.na(TX))
+# 
+# # Remove subjects that don't have complete data for all MMSE subitems for all
+# # time points.
+# time_points_PACC <- sort(unique(PACC_tbl$weeks_since_randomization))
+# PACC_tbl_complete_cases <- PACC_tbl %>%
+#   group_by(BID) %>%
+#   filter(all(time_points_PACC %in% weeks_since_randomization) &
+#            all(!is.na(score))) %>%
+#   ungroup()
+# 
+# PACC_tbl_complete_cases_control <- PACC_tbl_complete_cases %>%
+#   filter(TX == "Placebo")
+# 
+# PACC_tbl_complete_cases_experimental <- PACC_tbl_complete_cases %>%
+#   filter(TX == "Solanezumab")
+# 
+# 
+# PACC_summary_tbl <- PACC_tbl_complete_cases %>%
+#   group_by(item, TX, weeks_since_randomization) %>%
+#   summarise(
+#     mean_score = mean(score, na.rm = TRUE),
+#     sd_score = sd(score, na.rm = TRUE),
+#     n = n(),
+#     se_score = sd_score / sqrt(n)
+#   ) %>%
+#   ungroup()
+# 
+# PACC_tbl_complete_cases %>%
+#   ggplot(aes(x = ADURW, y = score, color = TX)) +
+#   geom_smooth() +
+#   facet_wrap(. ~ item, scales = "free")
+# 
+# 
+# 
+# PACC_summary_tbl %>%
+#   filter(weeks_since_randomization >= 0) %>%
+#   ggplot(aes(x = weeks_since_randomization, y = mean_score, color = TX)) +
+#   geom_line() +
+#   geom_point() +
+#   geom_errorbar(aes(
+#     ymin = mean_score - 1.96 * se_score,
+#     ymax = mean_score + 1.96 * se_score
+#   ),
+#   width = 0.2) +
+#   facet_wrap(. ~ item, scales = "free") +
+#   xlab("Weeks since Randomization") +
+#   ylab("Mean Score") +
+#   theme(legend.position = "bottom")
+
 
 # Helper Functions ---------
 

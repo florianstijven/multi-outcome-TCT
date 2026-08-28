@@ -12,46 +12,182 @@ source("R/simulations/simulation-A4LEARN-setup.R")
 
 
 ## MMSE -------------
-# 
-# K  <- MMSE_summary_tbl$weeks_since_randomization %>% unique() %>% length() - 1
-# J  <- MMSE_summary_tbl$item %>% unique() %>% length()
-# 
-# times_list <- rep(times_MMSE / 240, J)
-# 
-# prop_slow_models_4PL <- make_slowing_models(ref = "4PL", times = times_list, type = "proportional")
-# prop_slow_models_NC <- make_slowing_models(ref = "nc_spline", times = times_list, type = "proportional")
-# 
-# shared_prop_slow_models_4PL <- shared_parameter_model(
-#   model = prop_slow_models_4PL,
-#   shared_param_positions = list((1:J) * 3)
-# )
-# 
-# compute_treatment_shift(model = prop_slow_models_4PL, params = c(1, 0.1, 1e3, 1, 1, 1, 1, 1, 1), times = times_equal)
-# 
-# n_MC <- 30
-# p_values <- numeric(n_MC)
-# p_values_summing <- numeric(n_MC)
-# 
-# for (i in 1:n_MC) {
-#   data_set <- sample_A4LEARN_null("MMSE")
-#   analysis_results <- analyze_A4LEARN(data_set)
-#   p_values[i] <- targeted_test(
-#     m_tilde = analysis_results$m_tilde,
-#     Sigma   = analysis_results$Sigma_n,
-#     working_model = shared_prop_slow_models_4PL,
-#     A = build_omnibus_contrast_multi_outcome(J, K),
-#     ols = TRUE,
-#     start = rep(c(5, 0.1), J)
-#   )$p_value
-#   p_values_summing[i] <- targeted_test_statistic(
-#     B = build_summing_contrast_multi_outcome(J, K),
-#     m_tilde = analysis_results$m_tilde,
-#     Sigma = analysis_results$Sigma_n
-#   )$p_value
-# }
-# 
-# hist(p_values, main = "Histogram of p-values from targeted test", xlab = "p-value")
-# hist(unlist(p_values_summing), main = "Histogram of p-values from omnibus test", xlab = "p-value")
+
+K  <- MMSE_summary_tbl$weeks_since_randomization %>% unique() %>% length() - 1
+J  <- MMSE_summary_tbl$item %>% unique() %>% length()
+
+times_list <- rep(list(time_points_MMSE / 240), J)
+
+analysis_results_temp <- analyze_A4LEARN(MMSE_tbl_complete_cases)
+
+prop_slow_models_4PL <- make_slowing_models(
+  ref = "4PL",
+  times = times_list,
+  type = "proportional",
+  outcome_names = stringr::str_split_i(
+    string = rownames(analysis_results_temp$m_tilde),
+    pattern = "_",
+    i = 2
+  ) %>% unique()
+)
+prop_slow_models_NC <- make_slowing_models(
+  ref = "nc_spline",
+  times = times_list,
+  type = "proportional",
+  outcome_names = stringr::str_split_i(
+    string = rownames(analysis_results_temp$m_tilde),
+    pattern = "_",
+    i = 2
+  ) %>% unique()
+)
+
+shared_prop_slow_models_4PL <- shared_parameter_model(
+  working_model = prop_slow_models_4PL,
+  shared_param_positions = list((1:J) * 3)
+)
+
+
+n_MC <- 30
+p_values <- numeric(n_MC)
+p_values_summing <- numeric(n_MC)
+
+for (i in 1:n_MC) {
+  data_set <- sample_A4LEARN_null("MMSE")
+  analysis_results <- analyze_A4LEARN(data_set)
+  p_values[i] <- targeted_test(
+    m_tilde = analysis_results$m_tilde,
+    Sigma   = analysis_results$Sigma_n,
+    working_model = shared_prop_slow_models_4PL,
+    A = build_omnibus_contrast_multi_outcome(J, K),
+    ols = TRUE,
+    start = rep(c(5, 0.1), J)
+  )$p_value
+  p_values_summing[i] <- targeted_test_statistic(
+    B = build_summing_contrast_multi_outcome(J, K),
+    m_tilde = analysis_results$m_tilde,
+    Sigma = analysis_results$Sigma_n
+  )$p_value
+}
+
+hist(p_values, main = "Histogram of p-values from targeted test", xlab = "p-value")
+hist(unlist(p_values_summing), main = "Histogram of p-values from omnibus test", xlab = "p-value")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+analysis_results_temp <- analyze_A4LEARN(MMSE_tbl_complete_cases)
+
+
+Delta <- 0
+
+slowing_factor <- 0
+
+Delta <- compute_treatment_shift(
+  model = shared_prop_slow_models_4PL,
+  params = c(coef(gls_fitted), slowing_factor),
+  times = times_list
+)
+
+gls_fitted <- two_stage_gls_null(
+  m_tilde = analysis_results_temp$m_tilde + Delta,
+  Sigma   = analysis_results_temp$Sigma_n,
+  working_model = shared_prop_slow_models_4PL,
+  ols = TRUE,
+  start = rep(c(3, -1), J)
+)
+
+gls_fitted_full <- two_stage_gls_full(
+  m_tilde = analysis_results_temp$m_tilde + Delta,
+  Sigma   = analysis_results_temp$Sigma_n,
+  working_model = shared_prop_slow_models_4PL,
+  ols = TRUE,
+  start = c(rep(c(3, -1), J), 1)
+)
+
+gls_fitted_full_non_shared <- two_stage_gls_full(
+  m_tilde = analysis_results_temp$m_tilde + Delta,
+  Sigma   = analysis_results_temp$Sigma_n,
+  working_model = prop_slow_models_4PL,
+  ols = TRUE,
+  start = rep(c(3, -1, 1), J)
+)
+
+summary(gls_fitted_full)
+summary(gls_fitted_full_non_shared)
+
+outcome_names <- sapply(
+  rownames(analysis_results_temp$m_tilde),
+  function(x) {
+    stringr::str_split_i(string = x, pattern = "_", i = 2)
+  }
+)
+
+treatment_names <- sapply(
+  rownames(analysis_results_temp$m_tilde),
+  function(x) {
+    stringr::str_split_i(string = x, pattern = "_", i = 5)
+  }
+)
+
+plot_gls_fitted(
+  gls_fitted = gls_fitted, 
+  treatment_strata = treatment_names, 
+  outcome_strata = outcome_names,
+  times = rep(unlist(times_list), 2)
+) 
+
+plot_gls_fitted(
+  gls_fitted = gls_fitted_full, 
+  treatment_strata = treatment_names, 
+  outcome_strata = outcome_names,
+  times = rep(unlist(times_list), 2)
+)
+
+
+
+
+plot_gls_fitted(
+  gls_fitted = gls_fitted_full_non_shared, 
+  treatment_strata = treatment_names, 
+  outcome_strata = outcome_names,
+  times = rep(unlist(times_list), 2)
+)
+
+
+targeted_test(
+  m_tilde = analysis_results_temp$m_tilde + Delta,
+  Sigma   = analysis_results_temp$Sigma_n,
+  working_model = shared_prop_slow_models_4PL,
+  A = build_omnibus_contrast_multi_outcome(J, K),
+  ols = TRUE,
+  start = rep(c(3, -1), J)
+)
+
+
+targeted_test_statistic(
+  B = build_summing_contrast_multi_outcome(J, K),
+  m_tilde = analysis_results_temp$m_tilde + Delta,
+  Sigma = analysis_results_temp$Sigma_n
+)
+
+targeted_test(
+  m_tilde = analysis_results_temp$m_tilde + Delta,
+  Sigma   = analysis_results_temp$Sigma_n,
+  working_model = prop_slow_models_4PL,
+  A = build_omnibus_contrast_multi_outcome(J, K),
+  ols = TRUE,
+  start = rep(c(3, -1), J)
+)
 
 
 ## CDR-SB -------------
@@ -148,7 +284,7 @@ plot_gls_fitted(
   times = rep(unlist(times_list), 2)
 )
 
-slowing_factor <- 0.50
+slowing_factor <- 0.25
 
 Delta <- compute_treatment_shift(
   model = shared_prop_slow_models_4PL,

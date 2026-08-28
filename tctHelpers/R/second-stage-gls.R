@@ -67,7 +67,7 @@ fit_gls <- function(m_tilde, Sigma, mean_fn, jac_mean_fn, start, method = "L-BFG
     m_tilde = m_tilde,
     Sigma_inv = Sigma_inv,
     method  = method,
-    control = list(maxit = 1e3)
+    control = list(maxit = 5e3)
   )
   
   # Raise a warning if the optimization did not converge.
