@@ -12,7 +12,7 @@ module load R/4.4.2-gfbf-2024a
 export OMP_NUM_THREADS=1
 
 Rscript -e "install.packages('ellmer')"
-Rscript -e "install.packages('A4LEARN_1.2.20260114.tar.gz', repos = NULL, type = 'source')"
+Rscript -e "install.packages('A4LEARN.tar.gz', repos = NULL, type = 'source')"
 Rscript -e "renv::restore()"
 
 
