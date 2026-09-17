@@ -3,10 +3,12 @@
 library(tidyverse)
 library(A4LEARN)
 
+figures_dir <- "results/simulations/figures"
+
 # A4LEARN Data ----
 
 # For now, we will based the DGM on the complete cases in the A4LEARN study.
-# This should be changed later.
+# This COULD be changed later.
 
 clinical_data <- A4LEARN::ADQS %>%
   filter(EPOCH %in% c("BLINDED TREATMENT", "SCREENING"))
@@ -114,6 +116,14 @@ MMSE_summary_tbl %>%
   ylab("Mean Score") +
   theme(legend.position = "bottom")
 
+ggsave(
+  filename = file.path(figures_dir, "MMSE_complete-cases.pdf"),
+  width = double_width,
+  height = double_height,
+  dpi = res,
+  units = unit
+)
+
 ## CDR-SB -----------
 
 # Data set with CDRSB subitem scores.
@@ -178,6 +188,14 @@ CDRSB_summary_tbl %>%
   xlab("Weeks since Randomization") +
   ylab("Mean Score") +
   theme(legend.position = "bottom")
+
+ggsave(
+  filename = file.path(figures_dir, "CDRSB_complete-cases.pdf"),
+  width = double_width,
+  height = double_height,
+  dpi = res,
+  units = unit
+)
 
 ## PACC -----------
 
