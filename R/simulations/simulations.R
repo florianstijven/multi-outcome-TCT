@@ -144,5 +144,5 @@ scenarios_dgm_tbl %>%
       )
     ) 
   ) %>%
-  select(-working_model, -i) %>%
+  select(-working_model, -i, -Delta) %>%
   saveRDS(file = "results/simulations/intermediate-objects/p_values_tbl.rds")
