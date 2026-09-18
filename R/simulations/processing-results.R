@@ -29,14 +29,34 @@ results_tbl %>%
 
 
 results_tbl %>%
-  filter(outcome == "CDR-SB", slowing_shared == "common") %>%
-  ggplot(aes(x = p_value, fill = test_ref, linetype = test_slowing_shared)) +
+  filter(outcome == "MMSE", slowing_shared == "common") %>%
+  ggplot(aes(x = p_value, fill = test_slowing_shared)) +
   geom_histogram(alpha = 0.5, position = "identity") +
-  facet_grid(ref ~ slowing_factor) +
+  facet_grid(test_ref ~ slowing_factor) +
   theme_bw() +
   labs(
     title = "Distribution of p-values by analysis type",
     x = "p-value",
     y = "Count"
   ) +
+  theme(legend.position = "bottom")
+
+error_rates_tbl %>%
+  ggplot(
+    aes(
+      x = slowing_factor,
+      y = type_I_error_rate,
+      color = test_slowing_shared,
+      linetype = test_ref
+    )
+  ) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = 0.05,
+             linetype = "dashed",
+             color = "red") +
+  scale_y_continuous(limits = c(0, 1)) +
+  facet_grid(outcome ~ slowing_shared) +
+  theme_bw() +
+  labs(title = "Type I Error Rates by Analysis Type", x = "Slowing Factor", y = "Type I Error Rate") +
   theme(legend.position = "bottom")
