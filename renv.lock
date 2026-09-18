@@ -49,7 +49,7 @@
       "Author": "ATRI Biostatistics [aut, cre]",
       "Maintainer": "ATRI Biostatistics <biostat_request@atrihub.io>",
       "RemoteType": "local",
-      "RemoteUrl": "C:\\Users/u0157247/Desktop/A4LEARN_1.2.20260114.tar.gz"
+      "RemoteUrl": "A4LEARN.tar.gz"
     },
     "DBI": {
       "Package": "DBI",
