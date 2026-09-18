@@ -3928,7 +3928,7 @@
     "tctHelpers": {
       "Package": "tctHelpers",
       "Version": "0.0.0.9000",
-      "Source": "Local",
+      "Source": "unknown",
       "Title": "Helper Functions for Multi-Outcome Targeted Test Simulations",
       "Authors@R": "person(\"Multi-Outcome-TCT\", \"Author\", email = \"you@example.com\", role = c(\"aut\", \"cre\"))",
       "Description": "Internal helper functions (working-model construction, GLS fitting, targeted tests, contrast matrices, and local-power utilities) used by the multi-outcome-TCT project. Packaging these functions gives their closures a stable namespace (instead of .GlobalEnv), which is required for them to work correctly inside parallel (future/furrr) workers.",
@@ -3946,10 +3946,9 @@
         "ggplot2"
       ],
       "Config/roxygen2/version": "8.0.0",
+      "NeedsCompilation": "no",
       "Author": "Multi-Outcome-TCT Author [aut, cre]",
-      "Maintainer": "Multi-Outcome-TCT Author <you@example.com>",
-      "RemoteType": "local",
-      "RemoteUrl": "./tctHelpers"
+      "Maintainer": "Multi-Outcome-TCT Author <you@example.com>"
     },
     "testthat": {
       "Package": "testthat",
