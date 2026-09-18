@@ -142,4 +142,6 @@ scenarios_dgm_tbl %>%
     ) 
   ) %>%
   select(-working_model, -i, -Delta) %>%
+  rowwise(everything()) %>%
+  reframe(p_values) %>%
   saveRDS(file = "results/simulations/intermediate-objects/p_values_tbl.rds")

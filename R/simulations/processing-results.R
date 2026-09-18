@@ -4,7 +4,9 @@ library(tidyverse)
 
 # Load results
 results_tbl <- readRDS("results/simulations/intermediate-objects/p_values_tbl.rds") %>%
-  select(outcome, ref, slowing_shared, slowing_factor, alternative_type, p_values)
+  select(-Delta) %>%
+  rowwise(everything()) %>%
+  reframe(p_values) 
 
 # Convert results_tbl into nicer format with the results of one analysis per
 # row.
