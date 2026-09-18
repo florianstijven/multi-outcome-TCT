@@ -6,11 +6,8 @@ library(tctHelpers)
 
 source("R/simulations/simulation-A4LEARN-setup.R")
 
-# Simulations options. This should later be specified through command line
-# arguments or a configuration file.
-
-# Number of MC replications.
-n_MC <- 10
+# Simulations options specified through command line arguments.
+n_MC <- as.numeric(commandArgs(trailingOnly = TRUE)[1])
 
 # Set up parallel computing
 if (parallelly::supportsMulticore()) {
