@@ -42,9 +42,11 @@ scenarios_setup_tbl <- scenarios_setup_tbl %>%
     times_list = purrr::map2(times, J, ~ rep(list(.x / 240), .y))
   )
 
-
+# We are for the time not considering the NC spline model as a reference model
+# because it may fit the data to well and bring some erratic things into the
+# DGM.
 models_setup_tbl <- expand_grid(
-  ref = c("4PL", "nc_spline"),
+  ref = c("4PL"),
   slowing_shared = c("common", "outcome-specific")
 )
 

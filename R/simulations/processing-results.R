@@ -3,24 +3,23 @@
 library(tidyverse)
 
 # Load results
-results_tbl <- readRDS("results/simulations/intermediate-objects/p_values_tbl.rds") %>%
-  select(-Delta) %>%
-  rowwise(everything()) %>%
-  reframe(p_values) 
-
-# Convert results_tbl into nicer format with the results of one analysis per
-# row.
-results_tbl <- results_tbl %>%
-  rowwise(everything()) %>%
-  reframe(p_values) %>%
-  rowwise(everything()) %>%
-  reframe(p_values) %>%
-  select(-p_values)
+results_tbl <- readRDS("results/simulations/intermediate-objects/p_values_tbl.rds")
 
 # Analysis ----------
 
 ## Tables
 
+# Compute type I error rates and power for each analysis type. 
+error_rates_tbl = results_tbl %>%
+  group_by(outcome,
+           ref,
+           slowing_shared,
+           slowing_factor,
+           test_ref,
+           test_slowing_shared) %>%
+  summarise(type_I_error_rate = mean(p_value < 0.05, na.rm = TRUE),
+            proportion_NA = mean(is.na(p_value)),
+            .groups = "drop")
 ## Figures
 
 # Distribution of p-values for each analysis type.
@@ -30,7 +29,7 @@ results_tbl %>%
 
 
 results_tbl %>%
-  filter(outcome == "MMSE", slowing_shared == "common") %>%
+  filter(outcome == "CDR-SB", slowing_shared == "common") %>%
   ggplot(aes(x = p_value, fill = test_ref, linetype = test_slowing_shared)) +
   geom_histogram(alpha = 0.5, position = "identity") +
   facet_grid(ref ~ slowing_factor) +
@@ -40,5 +39,4 @@ results_tbl %>%
     x = "p-value",
     y = "Count"
   ) +
-  scale_fill_brewer(palette = "Set1", name = "Alternative Type") +
   theme(legend.position = "bottom")

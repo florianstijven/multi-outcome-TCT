@@ -1,4 +1,4 @@
-n_MC = 20
+n_MC = 100
 
 .PHONY: simulation
 	

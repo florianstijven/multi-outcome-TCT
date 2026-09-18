@@ -16,6 +16,8 @@ if (parallelly::supportsMulticore()) {
   plan(multisession, workers = parallel::detectCores() - 1)
 }
 
+t1 <- Sys.time()
+
 # Simulations ---------
 
 ## Setup ------------
@@ -145,3 +147,7 @@ scenarios_dgm_tbl %>%
   rowwise(everything()) %>%
   reframe(p_values) %>%
   saveRDS(file = "results/simulations/intermediate-objects/p_values_tbl.rds")
+
+print(paste0("Simulations completed in ", round(difftime(
+  Sys.time(), t1, units = "mins"
+), 2), " minutes."))
