@@ -24,7 +24,11 @@
 
 * We should also properly implement estimating the full model.
   - This includes inferences for all parameters with the warning that CIs etc only 
-  make sense if the model is correctly specified. 
+  make sense if the model is correctly specified.
+  
+* Could it be better to estimate the nuisance parameters in the full model
+instead of the null model for the data-adaptive tests?
+  - Is it possible to maximize power against fixed alternative, like 0.50 slowing.
   
   
   
