@@ -320,7 +320,10 @@ analyze_A4LEARN <- function(data_set) {
     pivot_wider(
       names_from = item,
       values_from = score,
-      names_prefix = "SCORE_"
+      names_prefix = "SCORE_",
+      # Column names are sorted alphabetically. This sorting should be
+      # preserved throughout the remainder of this function.
+      names_sort = TRUE
     ) %>%
     group_by(TX, weeks_since_randomization) %>%
     summarise(across(

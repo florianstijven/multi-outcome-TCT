@@ -16,6 +16,4 @@ Rscript -e "if(!require('A4LEARN')) install.packages('A4LEARN.tar.gz')"
 Rscript -e "devtools::install('./tctHelpers')"
 Rscript -e "renv::restore(exclude = c('A4LEARN'))"
 
-
-
-Rscript R/simulations/data-generating-mechanism.R
+make simulation

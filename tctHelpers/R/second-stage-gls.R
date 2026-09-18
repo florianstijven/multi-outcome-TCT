@@ -394,10 +394,17 @@ two_stage_gls_full <- function(m_tilde,
 #'   element of `m_tilde` by outcome.
 #' @param times optional numeric vector of time points for each element of
 #'   `m_tilde`.
+#' @param first_stage (boolean) If TRUE, plot the first-stage estimates with
+#'  error bars; if FALSE, only plot the GLS-fitted values.
 #'
 #' @returns a `ggplot` object.
 #' @export
-plot_gls_fitted <- function(gls_fitted, treatment_strata = NULL, outcome_strata = NULL, times = NULL) {
+plot_gls_fitted <- function(
+    gls_fitted, 
+    treatment_strata = NULL,
+    outcome_strata = NULL,
+    times = NULL,
+    first_stage = TRUE) {
   # Create a data frame for plotting.
   df_gls_fitted_predictions <- df_gls_fitted(gls_fitted, treatment_strata, outcome_strata, times)
   
@@ -406,12 +413,16 @@ plot_gls_fitted <- function(gls_fitted, treatment_strata = NULL, outcome_strata 
     stop("The 'ggplot2' package is required for plotting. Please install it using install.packages('ggplot2').")
   }
   
-  ggplot2::ggplot(df_gls_fitted_predictions, ggplot2::aes(x = time_points, y = fitted_value)) +
-    ggplot2::geom_line(ggplot2::aes(color = as.factor(treatment_strata)), size = 1) +
+  plot_object <- ggplot2::ggplot(df_gls_fitted_predictions, ggplot2::aes(x = time_points, y = fitted_value)) +
+    ggplot2::geom_line(ggplot2::aes(color = as.factor(treatment_strata)), size = 1)
+  if (first_stage) {
+    plot_object <- plot_object +
     ggplot2::geom_point(ggplot2::aes(y = first_stage_estimate, color = treatment_strata), size = 2) +
     ggplot2::geom_errorbar(ggplot2::aes(ymin = first_stage_estimate - 1.96 * SE_first_stage_estimate,
                                         ymax = first_stage_estimate + 1.96 * SE_first_stage_estimate,
-                                        color = treatment_strata), width = 0.1) +
+                                        color = treatment_strata), width = 0.1)
+    }
+  plot_object +
     ggplot2::facet_wrap(~ outcome_strata, scales = "free_y") +
     ggplot2::labs(x = "Time Points", y = "Fitted Value / First Stage Estimate",
                   title = "GLS Fitted Values and First Stage Estimates") +
