@@ -208,4 +208,15 @@ scenarios_dgm_tbl %>%
 
 # Save intermediate objects ---------
 
+# Remove intermediate information that will no longer be needed.
+scenarios_dgm_tbl <- scenarios_dgm_tbl %>%
+  select(
+    outcome,
+    ref, 
+    slowing_shared,
+    working_model,
+    slowing_factor,
+    Delta
+  )
+
 saveRDS(scenarios_dgm_tbl, file = "results/simulations/intermediate-objects/scenarios_dgm_tbl.rds")

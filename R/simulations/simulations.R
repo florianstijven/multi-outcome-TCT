@@ -65,7 +65,7 @@ compute_p_value <- function(m_tilde, Sigma, working_model, J, K, ref) {
   return(p_value)
 }
 
-simulate_p_values <- function(i, outcome, Delta) {
+simulate_p_values <- function(outcome, Delta) {
   data_set <- sample_A4LEARN_null(outcome)
   analysis_results <- analyze_A4LEARN(data_set)
   
@@ -130,21 +130,19 @@ simulate_p_values <- function(i, outcome, Delta) {
 # `.GlobalEnv`, so their closures resolve via a stable namespace and furrr
 # only needs to know to attach the package on each worker.
 scenarios_dgm_tbl %>%
-  rowwise(everything()) %>%
-  summarise(
-    p_values = future_map(
-      .x = 1:n_MC,
+  cross_join(tibble(i = 1:n_MC)) %>%
+  mutate(
+    p_values = future_map2(
+      .x = outcome,
+      .y = Delta,
       .f = simulate_p_values,
-      outcome = outcome,
-      Delta = Delta,
       .options = furrr_options(
         seed = TRUE,
         stdout = FALSE,
         conditions = character(),
         packages = "tctHelpers"
       )
-    ) %>% list()
+    ) 
   ) %>%
-  ungroup() %>%
-  select(outcome, ref, slowing_shared, slowing_factor, alternative_type, p_values) %>%
+  select(-working_model, -i) %>%
   saveRDS(file = "results/simulations/intermediate-objects/p_values_tbl.rds")

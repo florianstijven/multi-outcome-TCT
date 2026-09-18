@@ -95,9 +95,9 @@ MMSE_summary_tbl <- MMSE_tbl_complete_cases %>%
     mean_score = mean(score, na.rm = TRUE),
     sd_score = sd(score, na.rm = TRUE),
     n = n(),
-    se_score = sd_score / sqrt(n)
-  ) %>%
-  ungroup()
+    se_score = sd_score / sqrt(n),
+    .groups = "drop"
+  )
 
 
 
@@ -168,9 +168,9 @@ CDRSB_summary_tbl <- CDRSB_tbl_complete_cases %>%
     mean_score = mean(score, na.rm = TRUE),
     sd_score = sd(score, na.rm = TRUE),
     n = n(),
-    se_score = sd_score / sqrt(n)
-  ) %>%
-  ungroup()
+    se_score = sd_score / sqrt(n),
+    .groups = "drop"
+  )
 
 
 
@@ -328,8 +328,7 @@ analyze_A4LEARN <- function(data_set) {
     group_by(TX, weeks_since_randomization) %>%
     summarise(across(
       starts_with("SCORE_"),
-      mean,
-      na.rm = TRUE,
+      \(x) mean(x, na.rm = TRUE),
       .names = "{col}"
     )) %>%
     arrange(TX, weeks_since_randomization)
