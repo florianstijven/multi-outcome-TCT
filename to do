@@ -30,7 +30,7 @@ instead of the null model for the data-adaptive tests?
 * Cross fitting to improve finite-sample behavior
 
 * Simulations using both CDR-SB and MMSE as outcome
-  - There seems to be a problem with Delta
+  - There seems to be a problem with build_summing_contrast_multi_outcome(), cannot handle general times argument?
   
   
   

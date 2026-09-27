@@ -267,14 +267,16 @@ ggsave(
 # Function that samples iid observations from the A4LEARN empirical distribution
 # in the placebo arm.
 sample_A4LEARN_control <- function(endpoint) {
-  if (!(endpoint %in% c("CDR-SB", "MMSE"))) {
+  if (!(endpoint %in% c("CDR-SB", "MMSE", "MMSE + CDR-SB"))) {
     stop("Unknown endpoint: ", endpoint)
   }
   
   if (endpoint == "CDR-SB") {
     sampled_ids <- sample(
       unique(CDRSB_tbl_complete_cases_control$BID),
-      size = length(unique(CDRSB_tbl_complete_cases_control$BID)),
+      size = length(unique(
+        CDRSB_tbl_complete_cases_control$BID
+      )),
       replace = TRUE
     )
     
@@ -287,7 +289,9 @@ sample_A4LEARN_control <- function(endpoint) {
   } else if (endpoint == "MMSE") {
     sampled_ids <- sample(
       unique(MMSE_tbl_complete_cases_control$BID),
-      size = length(unique(MMSE_tbl_complete_cases_control$BID)),
+      size = length(unique(
+        MMSE_tbl_complete_cases_control$BID
+      )),
       replace = TRUE
     )
     
@@ -297,6 +301,22 @@ sample_A4LEARN_control <- function(endpoint) {
         mutate(BID = new_id)
     }) %>%
       list_rbind()
+  } else if (endpoint == "MMSE + CDR-SB") {
+    ids_full <- unique(MMSE_tbl_complete_cases_control$BID) %>%
+      intersect(unique(CDRSB_tbl_complete_cases_control$BID))
+    sampled_ids <- sample(ids_full, size = length(ids_full), replace = TRUE)
+    
+    data_sampled <- purrr::map2(.x = sampled_ids, .y = seq_along(sampled_ids), function(id, new_id) {
+      MMSE_tbl_complete_cases_control %>%
+        filter(BID == id) %>%
+        mutate(BID = new_id) %>%
+        bind_rows(CDRSB_tbl_complete_cases_control %>%
+                    filter(BID == id) %>%
+                    mutate(BID = new_id))
+    }) %>%
+      list_rbind()
+    
+    data_sampled
   }
 }
 

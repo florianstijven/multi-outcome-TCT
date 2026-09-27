@@ -41,21 +41,22 @@ construct_working_model_helper <- function(times, ref, slowing_shared, type = "p
   return(working_model)
 }
 
-compute_p_value <- function(m_tilde, Sigma, working_model, J, K, ref) {
+compute_p_value <- function(m_tilde, Sigma, working_model, J, times, ref) {
   if (ref == "4PL") {
     start = rep(c(2, 1), J)
   } else {
-    start = rep(0:K, J)
+    start = purrr::map(times, ~ rep(0, length(.x))) %>% unlist()
   }
-  
   p_value <- NA
+  
+  
   
   try({
     p_value <- targeted_test(
       m_tilde = m_tilde,
       Sigma   = Sigma,
       working_model = working_model,
-      A = build_omnibus_contrast_multi_outcome(J, K),
+      A = build_omnibus_contrast_multi_outcome(J, times = times),
       ols = TRUE,
       start = start
     )$p_value
@@ -77,7 +78,6 @@ simulate_p_values <- function(outcome, Delta) {
                                        pattern = "_",
                                        i = 2) %>% unique()
   J = length(outcome_names)
-  K = length(times) - 1
   times_list = purrr::map(times, ~ .x / 240)
   
   p_values_tbl <- expand_grid(
@@ -96,12 +96,23 @@ simulate_p_values <- function(outcome, Delta) {
         Sigma   = Sigma_new,
         working_model = working_model,
         J = J,
-        K = K,
+        times = times_list,
         ref = test_ref
       )
     ) %>%
     ungroup() %>%
     select(-working_model)
+  
+  # Determine strata for the summing contrast matrix (i.e., which subitem
+  # belongs to which outcome). This is currently only relevant for the "MMSE +
+  # CDR-SB" outcome, which has two subitems (MMSE and CDR-SB).
+  CDRSB_names <- c("CARE", "COMMUN", "HOME", "JUDGE", "MEMORY", "ORIENT")
+  strata <- stringr::str_split_i(string = rownames(m_tilde_new),
+                                 pattern = "_",
+                                 i = 2) %>%
+    unique() %in%
+    CDRSB_names
+  strata <- ifelse(strata, 2, 1)
   
   p_values_tbl <- p_values_tbl %>%
     bind_rows(
@@ -109,7 +120,7 @@ simulate_p_values <- function(outcome, Delta) {
         test_ref = "summing",
         test_slowing_shared = "summing",
         p_value = targeted_test_statistic(
-          B = build_summing_contrast_multi_outcome(J, K),
+          B = build_summing_contrast_multi_outcome(times = times_list, strata = strata),
           m_tilde = m_tilde_new,
           Sigma = Sigma_new
         )$p_value
@@ -129,6 +140,7 @@ simulate_p_values <- function(outcome, Delta) {
 # `.GlobalEnv`, so their closures resolve via a stable namespace and furrr
 # only needs to know to attach the package on each worker.
 scenarios_dgm_tbl %>%
+  filter(outcome == "MMSE + CDR-SB") %>%
   cross_join(tibble(i = 1:n_MC)) %>%
   mutate(
     p_values = future_map2(

@@ -103,7 +103,7 @@ build_omnibus_contrast_multi_outcome <- function(J, K, times = NULL) {
 #'
 #' @returns numeric contrast matrix with `K` rows.
 #' @export
-build_summing_contrast_multi_outcome <- function(J, K, times = NULL) {
+build_summing_contrast_multi_outcome <- function(J, K, times = NULL, strata = NULL) {
   # The time points in times should agree; otherwise, summing across outcomes is not
   # meaningful.
   if (!is.null(times)) {
@@ -113,22 +113,54 @@ build_summing_contrast_multi_outcome <- function(J, K, times = NULL) {
     # number of outcomes
     J <- length(times)
     no_of_measurements_vec <- purrr::map_dbl(times, ~ length(.x))
-    if (!all(no_of_measurements_vec == no_of_measurements_vec[1])) {
-      stop("All elements of times must have the same length.")
-    }
     K = no_of_measurements_vec[1] - 1
   }
-  # Create a contrast matrix that sums the treatment effects across all outcomes. This is done by summing the
-  # rows of the omnibus contrast matrix for each time point across all outcomes. The resulting contrast matrix will
-  # have K rows (one for each time point) and 2 * J * (K + 1) columns (one for each outcome and time point).
-  omnibus_contrast <- build_omnibus_contrast_multi_outcome(J, K)
-  # Matrix to sum the treatment effects across all outcomes for each time point.
-  sum_matrix <- matrix(0, nrow = K, ncol = J * K)
-  for (time_idx in seq_len(K)) {
-    sum_matrix[time_idx, seq(time_idx, J * K, by = K)] <- 1
+  if (is.null(times)) {
+    times <- rep(list(seq_len(K + 1)), J)
   }
+  if (is.null(strata)) {
+    strata <- rep(1, J)
+  }
+  # Total number of post-randomization measurements across all outcomes. Ths
+  # corresponds to the number of rows in the omnibus contrast matrix defined
+  # later.
+  total_measurements <- sum(purrr::map_dbl(times, ~ length(.x) - 1))
+  # Unlisted vector of time points, excluding baseline measurements. These
+  # entries correspond to the rows in the omnibus contrast matrix defined later.
+  times_vec <- unlist(purrr::map(times, ~ .x[-length(.x)]))
+  # Vector of stratum labels corresponding to each time point in times_vec.
+  times_stratum_vec <- unlist(purrr::map2(times, strata, ~ rep(.y, length(.x) - 1)))
+
+  # Create a contrast matrix that sums the treatment effects across all
+  # outcomes. This is done by summing the rows of the omnibus contrast matrix
+  # for each time point across all outcomes. The resulting contrast matrix will
+  # have K rows (one for each time point) and 2 * J * (K + 1) columns (one for
+  # each outcome and time point).
+  omnibus_contrast <- build_omnibus_contrast_multi_outcome(times = times)
+  # Matrix to sum the treatment effects across all outcomes for each time point.
+  sum_matrices = list()
+  j <- 1
+  for (stratum in unique(strata)) {
+    # Vector of time points corresponding to the current stratum.
+    times_vec_stratum <- times[strata == stratum][[1]]
+    # Number of post-baseline time points for the current stratum.
+    K <- length(times[strata == stratum][[1]]) - 1
+    sum_matrix <- matrix(0, nrow = K, ncol = total_measurements)
+     
+    for (time_idx in seq_len(K)) {
+      time <- times_vec_stratum[time_idx] 
+      # Rows of the omnibus contrast matrix that should be summed. This
+      # corresponds to the contrasts in unlist(times) that should be summed for
+      # the current stratum.
+      active_in_stratum <- times_vec == time & times_stratum_vec == stratum
+      sum_matrix[time_idx, active_in_stratum] <- 1
+    }
+    sum_matrices[[j]] <- sum_matrix
+    j <- j + 1
+  }
+
   # Multiply the omnibus contrast matrix by the sum matrix to get the summing contrast matrix.
-  summing_contrast <- sum_matrix %*% omnibus_contrast
+  summing_contrast <- do.call(rbind, sum_matrices) %*% omnibus_contrast
   summing_contrast
 }
 
