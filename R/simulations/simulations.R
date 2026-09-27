@@ -78,7 +78,7 @@ simulate_p_values <- function(outcome, Delta) {
                                        i = 2) %>% unique()
   J = length(outcome_names)
   K = length(times) - 1
-  times_list = rep(list(times / 240), J)
+  times_list = purrr::map(times, ~ .x / 240)
   
   p_values_tbl <- expand_grid(
     test_ref = c("4PL", "nc_spline"),
