@@ -312,10 +312,7 @@ data_set <- sample_A4LEARN_null("MMSE")
 data_set <- sample_A4LEARN_null("CDR-SB")
 
 analyze_A4LEARN <- function(data_set) {
-  times <- data_set %>%
-    pull(weeks_since_randomization) %>%
-    unique()
-  
+
   m_tilde <- data_set %>%
     pivot_wider(
       names_from = item,
@@ -340,7 +337,14 @@ analyze_A4LEARN <- function(data_set) {
       names_glue = "{.value}_WEEK_{weeks_since_randomization}_{TX}"
     )
   
+  # Remove missing entries. These correspond to subitems that were not measured
+  # at a given time (while some other subitem was measure at this time).
+  m_tilde <- m_tilde %>%
+    select(where(~ !all(is.na(.x))))
+  
   m_tilde <- m_tilde %>% t()
+  
+
   
   data_set_wide_cc <- data_set %>%
     group_by(BID) %>%
@@ -349,7 +353,8 @@ analyze_A4LEARN <- function(data_set) {
     pivot_wider(
       names_from = c("item"),
       values_from = "score",
-      names_prefix = "SCORE_"
+      names_prefix = "SCORE_", 
+      id_cols = c("BID", "weeks_since_randomization", "TX")
     ) %>%
     select(c(
       starts_with("SCORE_"),
@@ -364,6 +369,12 @@ analyze_A4LEARN <- function(data_set) {
     ) %>%
     select(contains("WEEK_")) %>%
     select(rownames(m_tilde))
+  
+  # Remove columns with only missing values. These correspond to subitems that
+  # were not measured at a given time (while some other subitem was measure at
+  # this time).
+  data_set_wide_cc <- data_set_wide_cc %>%
+    select(where(~ !all(is.na(.x))))
   
   Sigma <- data_set_wide_cc %>%
     cov(use = "pair")
@@ -383,6 +394,20 @@ analyze_A4LEARN <- function(data_set) {
     stop("Row names of covariance matrix do not match row names of mean vector.")
   }
   
+  # Extract the time points from the row names of the mean vector.
+  times <- tibble(row_name = rownames(m_tilde)) %>%
+    mutate(
+      time = str_extract(row_name, "WEEK_\\d+") %>%
+        str_remove("WEEK_") %>%
+        as.numeric(),
+      group = str_extract(row_name, "Placebo|Solanezumab"),
+      outcome = stringr::str_split_i(row_name, "_", 2)
+    ) %>%
+    filter(group == "Placebo") %>%
+    group_by(outcome) %>%
+    summarise(times = list(sort(unique(time)))) %>%
+    pull(times, name = outcome)
+  
   return(list(
     times = times,
     m_tilde = m_tilde,
@@ -401,14 +426,16 @@ compute_treatment_shift <- function(model, params, times) {
   mu <- model$mean_fn(params)
   
   shift <- c()
+  n_time_points_count <- 0
   for (j in seq_along(times)) {
     n_time_points <- length(times[[j]])
-    mu_j_indices <- ((j - 1) * 2 * n_time_points + 1):(j * 2 * n_time_points)
+    mu_j_indices <- (n_time_points_count + 1):(n_time_points_count + 2 * n_time_points)
     
     control_mean <- mu[mu_j_indices][1:n_time_points]
     experimental_mean <- mu[mu_j_indices][(n_time_points + 1):(2 * n_time_points)]
     
     shift <- c(shift, control_mean - control_mean, experimental_mean - control_mean)
+    n_time_points_count <- n_time_points_count + 2 * n_time_points
   }
   
   return(shift)

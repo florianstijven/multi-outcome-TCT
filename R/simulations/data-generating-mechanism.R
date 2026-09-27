@@ -17,10 +17,11 @@ figures_dir <- "results/local-power/figures/"
 # scenario.
 
 scenarios_setup_tbl <- tibble(
-  outcome = c("MMSE", "CDR-SB"),
+  outcome = c("MMSE", "CDR-SB", "MMSE + CDR-SB"),
   true_analysis_list = list(
     analyze_A4LEARN(MMSE_tbl_complete_cases),
-    analyze_A4LEARN(CDRSB_tbl_complete_cases)
+    analyze_A4LEARN(CDRSB_tbl_complete_cases),
+    analyze_A4LEARN(bind_rows(MMSE_tbl_complete_cases, CDRSB_tbl_complete_cases))
   )
 )
 
@@ -37,10 +38,13 @@ scenarios_setup_tbl <- scenarios_setup_tbl %>%
         i = 2
       ) %>% unique()
     ),
-    J = purrr::map_int(outcome_names, length),
-    K = purrr::map_int(times, ~ length(.x) - 1),
-    times_list = purrr::map2(times, J, ~ rep(list(.x / 240), .y))
+    J = purrr::map_int(outcome_names, length)
   )
+
+scenarios_setup_tbl <- scenarios_setup_tbl %>%
+  rowwise(everything()) %>%
+  summarise(times_list = purrr::map(times, ~ .x / 240) %>% list()) %>% 
+  ungroup()
 
 # We are for the time not considering the NC spline model as a reference model
 # because it may fit the data to well and bring some erratic things into the
@@ -86,7 +90,7 @@ scenarios_setup_tbl = scenarios_setup_tbl %>%
         if (ref == "4PL")
           rep(c(2, 1), J)
         else
-          rep(0:K, J)
+          purrr::map_dbl(times_list, ~ 1:length(.x))
       }
     ) %>% list()
   ) %>%
@@ -170,7 +174,7 @@ scenarios_dgm_tbl %>%
     plot = plot_dgm_trajectories(
       gls_fitted = gls_fitted,
       params = params,
-      times = rep(unlist(times_list), 2)
+      times = unlist(rep(times_list, each = 2))
     ) %>% list(),
     plot_file_name = paste0(
       "results/simulations/figures/dgm-trajectories-",

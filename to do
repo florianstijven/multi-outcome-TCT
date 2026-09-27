@@ -1,10 +1,5 @@
 * Implement more unit tests
   
-* Add more features for building models for small building blocks?
-  - I don't know which features beyond concatenation and shared parameters could be useful though.
-  
-
-
 
 * Do some very prelim sims
   - I should probably also implement a permutation test because type I error may be too inflatef
@@ -29,6 +24,13 @@
 * Could it be better to estimate the nuisance parameters in the full model
 instead of the null model for the data-adaptive tests?
   - Is it possible to maximize power against fixed alternative, like 0.50 slowing.
+  - Possibly need to do CV, maybe not asymptotically, but to get reasonable finite-sample
+  performance.
+  
+* Cross fitting to improve finite-sample behavior
+
+* Simulations using both CDR-SB and MMSE as outcome
+  - There seems to be a problem with Delta
   
   
   
