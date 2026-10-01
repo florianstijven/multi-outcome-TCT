@@ -29,7 +29,7 @@ results_tbl %>%
 
 
 results_tbl %>%
-  filter(outcome == "MMSE", slowing_shared == "common") %>%
+  filter(outcome == "MMSE + CDR-SB", slowing_shared == "common") %>%
   ggplot(aes(x = p_value, fill = test_slowing_shared)) +
   geom_histogram(alpha = 0.5, position = "identity") +
   facet_grid(test_ref ~ slowing_factor) +

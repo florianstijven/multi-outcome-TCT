@@ -140,7 +140,6 @@ simulate_p_values <- function(outcome, Delta) {
 # `.GlobalEnv`, so their closures resolve via a stable namespace and furrr
 # only needs to know to attach the package on each worker.
 scenarios_dgm_tbl %>%
-  filter(outcome == "MMSE + CDR-SB") %>%
   cross_join(tibble(i = 1:n_MC)) %>%
   mutate(
     p_values = future_map2(
