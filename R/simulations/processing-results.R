@@ -24,7 +24,7 @@ error_rates_tbl = results_tbl %>%
 
 # Distribution of p-values for each analysis type.
 results_tbl %>%
-  filter(outcome == "CDR-SB", slowing_shared == "common") %>%
+  filter(outcome == "CDRSB", slowing_shared == "common") %>%
   ggplot(aes(x = p_value))
 
 
